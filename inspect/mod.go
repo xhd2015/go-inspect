@@ -3,7 +3,7 @@ package inspect
 import (
 	"fmt"
 
-	"github.com/xhd2015/go-mock/sh"
+	"github.com/xhd2015/go-inspect/sh"
 )
 
 type Module struct {

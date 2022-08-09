@@ -6,13 +6,13 @@ import (
 
 	_ "google.golang.org/grpc" // third party
 
-	"github.com/xhd2015/go-mock/support/xgo/inspect/testdata/mock_aware/biz"
-	mock_biz "github.com/xhd2015/go-mock/test/mock_gen/support/xgo/inspect/testdata/mock_aware/biz"
+	"github.com/xhd2015/go-inspect/support/xgo/inspect/testdata/mock_aware/biz"
+	mock_biz "github.com/xhd2015/go-inspect/test/mock_gen/support/xgo/inspect/testdata/mock_aware/biz"
 )
 
-func aha(){
+func aha() {
 	a := 10
-	fmt.Printf("aha:%v",a)
+	fmt.Printf("aha:%v", a)
 }
 
 func main() {

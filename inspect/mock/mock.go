@@ -1,8 +1,8 @@
 package mock
 
 import (
-	"github.com/xhd2015/go-mock/inspect/typeinfo"
-	"github.com/xhd2015/go-mock/mock"
+	"github.com/xhd2015/go-inspect/inspect/typeinfo"
+	"github.com/xhd2015/go-inspect/mock"
 )
 
 // This file defines a direct dependency of the generated code.

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/xhd2015/go-mock/inspect/extension"
+	"github.com/xhd2015/go-inspect/inspect/extension"
 )
 
 // go test -run TestUnmarshalSimple -v ./support/mock

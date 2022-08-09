@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/xhd2015/go-mock/inspect/testdata/simple_run/biz"
-	"github.com/xhd2015/go-mock/mock"
+	"github.com/xhd2015/go-inspect/inspect/testdata/simple_run/biz"
+	"github.com/xhd2015/go-inspect/mock"
 )
 
 func main() {

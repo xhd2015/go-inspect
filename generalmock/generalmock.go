@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/xhd2015/go-mock/mock"
+	"github.com/xhd2015/go-inspect/mock"
 )
 
 // PutLocal defines how to associate mockData with current goroutine

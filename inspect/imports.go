@@ -7,7 +7,8 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/xhd2015/go-mock/code/edit"
+	"github.com/xhd2015/go-inspect/code/edit"
+	"github.com/xhd2015/go-inspect/inspect/util"
 )
 
 // ImportList represents a list of imports
@@ -51,7 +52,7 @@ func (c *ImportList) ImportOrUseNext(pkgPath string, suggestAlias string, name s
 	}
 
 	// try next name
-	return NextName(func(s string) bool {
+	return util.NextName(func(s string) bool {
 		if c.CanUseName != nil && !c.CanUseName(s) {
 			return false
 		}
@@ -120,7 +121,7 @@ func ensureImports(fset *token.FileSet, f *ast.File, buf *edit.Buffer, alias str
 		}
 		return
 	}
-	off := OffsetOf(fset, f.Name.End())
+	off := util.OffsetOf(fset, f.Name.End())
 	space := ""
 	if alias != "" {
 		space = " "

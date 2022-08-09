@@ -6,17 +6,26 @@ import (
 	"path"
 	"strings"
 
-	"github.com/xhd2015/go-mock/inspect"
+	"github.com/xhd2015/go-inspect/inspect"
+	"github.com/xhd2015/go-inspect/inspect/load"
+	"github.com/xhd2015/go-inspect/inspect/util"
+	api "github.com/xhd2015/go-inspect/inspect2"
 )
 
-func PrintRewrite(file string, printRewrite bool, printMock bool, opts *inspect.RewriteOptions) {
+type LoadOptions struct {
+	LoadArgs []string // passed to packages.Load
+
+	ForTest bool
+}
+
+func PrintRewrite(file string, printRewrite bool, printMock bool, loadOpts *LoadOptions, opts *inspect.RewriteOptions) {
 	if file == "" {
 		panic(fmt.Errorf("requires file"))
 	}
 	if !strings.HasSuffix(file, ".go") {
 		panic(fmt.Errorf("requires go file"))
 	}
-	absFile, err := toAbsPath(file)
+	absFile, err := util.ToAbsPath(file)
 	if err != nil {
 		panic(fmt.Errorf("make file absolute error:%v", err))
 	}
@@ -27,57 +36,60 @@ func PrintRewrite(file string, printRewrite bool, printMock bool, opts *inspect.
 	if stat.IsDir() {
 		panic(fmt.Errorf("path is a directory, expecting a file:%v", file))
 	}
-
-	projectDir := path.Dir(absFile)
-	for projectDir != "/" {
-		modStat, ferr := os.Stat(path.Join(projectDir, "go.mod"))
-		if ferr == nil && !modStat.IsDir() {
-			break
-		}
-		projectDir = path.Dir(projectDir)
-		continue
+	if loadOpts == nil {
+		loadOpts = &LoadOptions{}
 	}
-	if projectDir == "/" {
-		panic(fmt.Errorf("no go.mod found for file:%v", file))
+	projectDir := util.FindProjectDir(absFile)
+
+	rel, ok := util.RelPath(projectDir, absFile)
+	if !ok {
+		panic(fmt.Errorf("%s not child of module:%s", absFile, projectDir))
 	}
 
-	rel,ok := inspect.RelPath(projectDir,absFile)
-	if !ok{
-		panic(fmt.Errorf("%s not child of module:%s",absFile,projectDir))
-	}
-	
-	loadPkg := "./" + strings.TrimPrefix(path.Dir(rel),"./")
-	fset, starterPkgs, err := inspect.LoadPackages([]string{loadPkg}, &inspect.LoadOptions{
+	loadPkg := "./" + strings.TrimPrefix(path.Dir(rel), "./")
+	g, err := load.LoadPackages([]string{loadPkg}, &load.LoadOptions{
 		ProjectDir: projectDir,
+		ForTest:    loadOpts.ForTest,
+		BuildFlags: loadOpts.LoadArgs,
 	})
-	if err!=nil{
-		panic(fmt.Errorf("loading packages error:%v",err))
+	if err != nil {
+		panic(fmt.Errorf("loading packages error:%v", err))
 	}
 
-	contents := inspect.RewritePackages(fset, starterPkgs, opts)
-	var foundContent *inspect.FileContentError
-	var mockContent string
-	for _, pkgRes := range contents {
-		// generate rewritting files
-		foundContent = pkgRes.Files[absFile]
-		if foundContent != nil {
-			mockContent = pkgRes.MockContent
-			break
+	rw := inspect.NewMockRewritter(opts)
+	session := api.NewSession(g)
+	api.VisitAll(func(f func(pkg api.Pkg) bool) {
+		for _, p := range g.LoadInfo().StarterPkgs() {
+			if !f(p) {
+				return
+			}
 		}
-	}
-	if foundContent == nil {
+	}, session, rw)
+
+	var rewriteContent string
+	var mockContent string
+	session.Gen(&api.EditCallbackFn{
+		Rewrites: func(f api.FileContext, content string) bool {
+			if f.AbsPath() == absFile {
+				rewriteContent = content
+			}
+			return true
+		},
+		Pkg: func(p api.Pkg, kind, realName, content string) bool {
+			mockContent = content
+			return true
+		},
+	})
+	if rewriteContent == "" {
 		fmt.Fprintf(os.Stderr, "no content\n")
 		return
-	}
-	if foundContent.Error != nil {
-		panic(foundContent.Error)
 	}
 
 	if printRewrite {
 		if printMock {
 			fmt.Printf("// rewrite of %s:\n", absFile)
 		}
-		fmt.Print(string(foundContent.Content))
+		fmt.Print(string(rewriteContent))
 	}
 
 	if printMock {

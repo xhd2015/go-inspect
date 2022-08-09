@@ -1,5 +1,5 @@
 {
-  "uri": "github.com/xhd2015/go-mock/inspect/typeinfo.TestUser",
+  "uri": "github.com/xhd2015/go-inspect/inspect/typeinfo.TestUser",
   "properties": {
     "some_base_property": {
       "type": "integer"
@@ -11,7 +11,7 @@
       "type": "string"
     },
     "grand": {
-      "$ref": "github.com/xhd2015/go-mock/inspect/typeinfo.GrandfatherType"
+      "$ref": "github.com/xhd2015/go-inspect/inspect/typeinfo.GrandfatherType"
     },
     "SomeUntaggedBaseProperty": {
       "type": "boolean"
@@ -45,7 +45,7 @@
       "$ref": "8"
     },
     "photo2": {
-      "$ref": "github.com/xhd2015/go-mock/inspect/typeinfo.Bytes"
+      "$ref": "github.com/xhd2015/go-inspect/inspect/typeinfo.Bytes"
     },
     "feeling": {
       "type": "integer"
@@ -130,15 +130,15 @@
       },
       "type": "array"
     },
-    "github.com/xhd2015/go-mock/inspect/typeinfo.Bytes": {
-      "uri": "github.com/xhd2015/go-mock/inspect/typeinfo.Bytes",
+    "github.com/xhd2015/go-inspect/inspect/typeinfo.Bytes": {
+      "uri": "github.com/xhd2015/go-inspect/inspect/typeinfo.Bytes",
       "items": {
         "type": "integer"
       },
       "type": "array"
     },
-    "github.com/xhd2015/go-mock/inspect/typeinfo.GrandfatherType": {
-      "uri": "github.com/xhd2015/go-mock/inspect/typeinfo.GrandfatherType",
+    "github.com/xhd2015/go-inspect/inspect/typeinfo.GrandfatherType": {
+      "uri": "github.com/xhd2015/go-inspect/inspect/typeinfo.GrandfatherType",
       "properties": {
         "family_name": {
           "type": "string"
@@ -146,8 +146,8 @@
       },
       "type": "object"
     },
-    "github.com/xhd2015/go-mock/inspect/typeinfo.MapType": {
-      "uri": "github.com/xhd2015/go-mock/inspect/typeinfo.MapType",
+    "github.com/xhd2015/go-inspect/inspect/typeinfo.MapType": {
+      "uri": "github.com/xhd2015/go-inspect/inspect/typeinfo.MapType",
       "patternProperties": {
         ".*": {
           "$ref": "5"
@@ -155,8 +155,8 @@
       },
       "type": "object"
     },
-    "github.com/xhd2015/go-mock/inspect/typeinfo.SomeBaseType": {
-      "uri": "github.com/xhd2015/go-mock/inspect/typeinfo.SomeBaseType",
+    "github.com/xhd2015/go-inspect/inspect/typeinfo.SomeBaseType": {
+      "uri": "github.com/xhd2015/go-inspect/inspect/typeinfo.SomeBaseType",
       "properties": {
         "some_base_property": {
           "type": "integer"
@@ -168,7 +168,7 @@
           "type": "string"
         },
         "grand": {
-          "$ref": "github.com/xhd2015/go-mock/inspect/typeinfo.GrandfatherType"
+          "$ref": "github.com/xhd2015/go-inspect/inspect/typeinfo.GrandfatherType"
         },
         "SomeUntaggedBaseProperty": {
           "type": "boolean"
@@ -176,8 +176,8 @@
       },
       "type": "object"
     },
-    "github.com/xhd2015/go-mock/inspect/typeinfo.nonExported": {
-      "uri": "github.com/xhd2015/go-mock/inspect/typeinfo.nonExported",
+    "github.com/xhd2015/go-inspect/inspect/typeinfo.nonExported": {
+      "uri": "github.com/xhd2015/go-inspect/inspect/typeinfo.nonExported",
       "properties": {
         "PublicNonExported": {
           "type": "integer"

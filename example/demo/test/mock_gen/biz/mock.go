@@ -4,12 +4,12 @@ package biz
 
 import (
     "context"
-    "github.com/xhd2015/go-mock/example/demo/biz"
-    _mock "github.com/xhd2015/go-mock/mock"
+    "github.com/xhd2015/go-inspect/example/demo/biz"
+    _mock "github.com/xhd2015/go-inspect/mock"
 )
 
 const _SKIP_MOCK = true
-const FULL_PKG_NAME = "github.com/xhd2015/go-mock/example/demo/biz"
+const FULL_PKG_NAME = "github.com/xhd2015/go-inspect/example/demo/biz"
 
 func Setup(ctx context.Context,setup func(m *M)) context.Context {
     m:=M{}

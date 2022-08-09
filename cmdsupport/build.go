@@ -8,7 +8,8 @@ import (
 	"path"
 	"strings"
 
-	"github.com/xhd2015/go-mock/sh"
+	"github.com/xhd2015/go-inspect/inspect/util"
+	"github.com/xhd2015/go-inspect/sh"
 )
 
 func GetRewriteRoot() string {
@@ -67,7 +68,7 @@ func Build(args []string, opts *BuildOptions) *BuildResult {
 		projectRoot = opts.ProjectRoot
 	}
 	var err error
-	projectRoot, err = toAbsPath(projectRoot)
+	projectRoot, err = util.ToAbsPath(projectRoot)
 	if err != nil {
 		panic(err)
 	}
@@ -76,7 +77,7 @@ func Build(args []string, opts *BuildOptions) *BuildResult {
 	if opts != nil && opts.Output != "" {
 		output = opts.Output
 		if !path.IsAbs(output) {
-			output, err = toAbsPath(output)
+			output, err = util.ToAbsPath(output)
 			if err != nil {
 				panic(fmt.Errorf("make abs path err:%v", err))
 			}
@@ -99,12 +100,12 @@ func Build(args []string, opts *BuildOptions) *BuildResult {
 
 	// root dir is errous:
 	//     /path/to/rewrite-root=>/
-	//     //Users/x/gopath/pkg/mod/github.com/xhd2015/go-mock/v1/src/db/impl/util.go
+	//     //Users/x/gopath/pkg/mod/github.com/xhd2015/go-inspect/v1/src/db/impl/util.go
 	//
 	// so replacement must have at least one child:
 	//     /path/to/rewrite-root/X=>/X
 	rewriteRoot := GetRewriteRoot()
-	root, err := toAbsPath(rewriteRoot)
+	root, err := util.ToAbsPath(rewriteRoot)
 	if err != nil {
 		panic(fmt.Errorf("get absolute path failed:%v %v", rewriteRoot, err))
 	}
@@ -138,7 +139,7 @@ func Build(args []string, opts *BuildOptions) *BuildResult {
 
 	// NOTE: can only specify -gcflags once, the last flag wins.
 	// example:
-	//     MOD=$(go list -m);W=${workspaceFolder};R=/var/folders/y8/kmfy7f8s5bb5qfsp0z8h7j5m0000gq/T/go-rewrite;D=$R$W;cd $D;DP=$(cd $D;cd ..;pwd); with-go1.14 go build -gcflags="all=-N -l -trimpath=/var/folders/y8/kmfy7f8s5bb5qfsp0z8h7j5m0000gq/T/go-rewrite/Users/xhd2015/Projects/gopath/src/github.com/xhd2015/go-mock=>/Users/xhd2015/Projects/gopath/src/github.com/xhd2015/go-mock" -o /tmp/xgo/${workspaceFolderBasename}/inspect_rewrite.with_go_mod.bin ./support/xgo/inspect/testdata/inspect_rewrite.go
+	//     MOD=$(go list -m);W=${workspaceFolder};R=/var/folders/y8/kmfy7f8s5bb5qfsp0z8h7j5m0000gq/T/go-rewrite;D=$R$W;cd $D;DP=$(cd $D;cd ..;pwd); with-go1.14 go build -gcflags="all=-N -l -trimpath=/var/folders/y8/kmfy7f8s5bb5qfsp0z8h7j5m0000gq/T/go-rewrite/Users/xhd2015/Projects/gopath/src/github.com/xhd2015/go-inspect=>/Users/xhd2015/Projects/gopath/src/github.com/xhd2015/go-inspect" -o /tmp/xgo/${workspaceFolderBasename}/inspect_rewrite.with_go_mod.bin ./support/xgo/inspect/testdata/inspect_rewrite.go
 	cmdList := []string{
 		"set -e",
 		// fmt.Sprintf("REWRITE_ROOT=%s", quote(root)),
@@ -177,28 +178,6 @@ func Build(args []string, opts *BuildOptions) *BuildResult {
 
 var Quotes = sh.Quotes
 var Quote = sh.Quote
-
-// if pathName is "", cwd is returned
-func toAbsPath(pathName string) (string, error) {
-	// if pathName == "" {
-	// 	return "", fmt.Errorf("dir should not be empty")
-	// }
-	if path.IsAbs(pathName) {
-		return pathName, nil
-	}
-	// _, err := os.Stat(pathName)
-	// if err != nil {
-	// 	return "", fmt.Errorf("%s not exists:%v", pathName, err)
-	// }
-	// if !f.IsDir() {
-	// 	return "", fmt.Errorf("%s is not a dir", pathName)
-	// }
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "", fmt.Errorf("get cwd error:%v", err)
-	}
-	return path.Join(cwd, pathName), nil
-}
 
 // we are actually creating overlay, so CopyDirs can be ignored.
 

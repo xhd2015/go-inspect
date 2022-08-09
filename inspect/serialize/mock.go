@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/xhd2015/go-mock/inspect/extension"
-	"github.com/xhd2015/go-mock/inspect/typeinfo"
+	"github.com/xhd2015/go-inspect/inspect/extension"
+	"github.com/xhd2015/go-inspect/inspect/typeinfo"
 )
 
 func Mock(v interface{}) interface{} {

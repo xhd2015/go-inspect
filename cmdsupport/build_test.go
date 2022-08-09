@@ -3,7 +3,7 @@ package cmdsupport
 import (
 	"testing"
 
-	"github.com/xhd2015/go-mock/inspect"
+	"github.com/xhd2015/go-inspect/inspect"
 )
 
 // go test -run '^TestGenRewrite$' -v  ./support/xgo/cmd
@@ -35,7 +35,7 @@ func TestBuildRewrite(t *testing.T) {
 			},
 		},
 		&BuildOptions{
-			Debug: true,
+			Debug:       true,
 			ProjectRoot: "../../..",
 		},
 	)

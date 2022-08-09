@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/xhd2015/go-mock/example/demo/biz"
-	mock_biz "github.com/xhd2015/go-mock/example/demo/test/mock_gen/biz"
-	"github.com/xhd2015/go-mock/mock"
+	"github.com/xhd2015/go-inspect/example/demo/biz"
+	mock_biz "github.com/xhd2015/go-inspect/example/demo/test/mock_gen/biz"
+	"github.com/xhd2015/go-inspect/mock"
 )
 
 func main() {

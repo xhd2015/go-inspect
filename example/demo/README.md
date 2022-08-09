@@ -3,15 +3,15 @@ This demo shows how rewrite and mock works.
 
 Run:
 ```bash
-go run github.com/xhd2015/go-mock run ./
+go run github.com/xhd2015/go-inspect run ./
 ```
 
 Output:
 ```
 main begin
-calling: github.com/xhd2015/go-mock/example/demo/biz.Run
+calling: github.com/xhd2015/go-inspect/example/demo/biz.Run
 mock biz.Run
-calling: github.com/xhd2015/go-mock/example/demo/biz.Status.Run
+calling: github.com/xhd2015/go-inspect/example/demo/biz.Status.Run
 biz.Status.Run: 2
 ```
 
@@ -39,9 +39,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/xhd2015/go-mock/example/demo/biz"
-	mock_biz "github.com/xhd2015/go-mock/example/demo/test/mock_gen/biz"
-	"github.com/xhd2015/go-mock/mock"
+	"github.com/xhd2015/go-inspect/example/demo/biz"
+	mock_biz "github.com/xhd2015/go-inspect/example/demo/test/mock_gen/biz"
+	"github.com/xhd2015/go-inspect/mock"
 )
 
 func main() {
@@ -74,9 +74,9 @@ func main() {
 We get the following output explained:
 ```
 main begin            --> main begin
-calling: github.com/xhd2015/go-mock/example/demo/biz.Run   --> printed by our general interceptor
+calling: github.com/xhd2015/go-inspect/example/demo/biz.Run   --> printed by our general interceptor
 mock biz.Run          --> function mocked
-calling: github.com/xhd2015/go-mock/example/demo/biz.Status.Run   --> printed by our general interceptor
+calling: github.com/xhd2015/go-inspect/example/demo/biz.Status.Run   --> printed by our general interceptor
 biz.Status.Run: 2     --> function not mocked
 ```
 
@@ -86,7 +86,7 @@ The interceptor is very powerful, just like interceptor in usual RCP frameworks 
 # Verify mock content
 You can verify the generated content via:
 ```bash
-go run github.com/xhd2015/go-mock print ./biz/biz.go
+go run github.com/xhd2015/go-inspect print ./biz/biz.go
 ```
 
 Original content:
@@ -114,22 +114,22 @@ func (c Status) Run(ctx context.Context, status int, _ string) (int, error) {
 Output:
 rewrite content
 ```go
-// rewrite of /Users/x/gopath/src/github.com/xhd2015/go-mock/example/demo/biz/biz.go:
-package biz;import _mock "github.com/xhd2015/go-mock/mock"
+// rewrite of /Users/x/gopath/src/github.com/xhd2015/go-inspect/example/demo/biz/biz.go:
+package biz;import _mock "github.com/xhd2015/go-inspect/mock"
 
 import (
         "context"
         "fmt"
 )
 
-func Run(ctx context.Context, status int, unused_2 string) (Resp_0 int, err error) {var _mockreq = struct{Status int `json:"status"`;Unused_2 string `json:"unused_2"`;}{Status: status,Unused_2: unused_2};var _mockresp struct{Resp_0 int `json:"Resp_0"`;};err = _mock.TrapFunc(ctx,&_mock.StubInfo{PkgName:"github.com/xhd2015/go-mock/example/demo/biz",Owner:"",OwnerPtr:false,Name:"Run"}, nil, &_mockreq, &_mockresp,_mockRun,false,true,true);Resp_0 = _mockresp.Resp_0;return;}; func _mockRun(ctx context.Context, status int, _ string)(int, error){
+func Run(ctx context.Context, status int, unused_2 string) (Resp_0 int, err error) {var _mockreq = struct{Status int `json:"status"`;Unused_2 string `json:"unused_2"`;}{Status: status,Unused_2: unused_2};var _mockresp struct{Resp_0 int `json:"Resp_0"`;};err = _mock.TrapFunc(ctx,&_mock.StubInfo{PkgName:"github.com/xhd2015/go-inspect/example/demo/biz",Owner:"",OwnerPtr:false,Name:"Run"}, nil, &_mockreq, &_mockresp,_mockRun,false,true,true);Resp_0 = _mockresp.Resp_0;return;}; func _mockRun(ctx context.Context, status int, _ string)(int, error){
         fmt.Printf("biz.Run: %v\n", status)
         return 0, nil
 }
 
 type Status int
 
-func (c Status) Run(ctx context.Context, status int, unused_2 string) (Resp_0 int, err error) {var _mockreq = struct{Status int `json:"status"`;Unused_2 string `json:"unused_2"`;}{Status: status,Unused_2: unused_2};var _mockresp struct{Resp_0 int `json:"Resp_0"`;};err = _mock.TrapFunc(ctx,&_mock.StubInfo{PkgName:"github.com/xhd2015/go-mock/example/demo/biz",Owner:"Status",OwnerPtr:false,Name:"Run"}, c, &_mockreq, &_mockresp,_mockStatus_Run,true,true,true);Resp_0 = _mockresp.Resp_0;return;}; func _mockStatus_Run(c Status,ctx context.Context, status int, _ string)(int, error){
+func (c Status) Run(ctx context.Context, status int, unused_2 string) (Resp_0 int, err error) {var _mockreq = struct{Status int `json:"status"`;Unused_2 string `json:"unused_2"`;}{Status: status,Unused_2: unused_2};var _mockresp struct{Resp_0 int `json:"Resp_0"`;};err = _mock.TrapFunc(ctx,&_mock.StubInfo{PkgName:"github.com/xhd2015/go-inspect/example/demo/biz",Owner:"Status",OwnerPtr:false,Name:"Run"}, c, &_mockreq, &_mockresp,_mockStatus_Run,true,true,true);Resp_0 = _mockresp.Resp_0;return;}; func _mockStatus_Run(c Status,ctx context.Context, status int, _ string)(int, error){
         fmt.Printf("biz.Status.Run: %v\n", status)
         return 0, nil
 }
@@ -138,19 +138,19 @@ func (c Status) Run(ctx context.Context, status int, unused_2 string) (Resp_0 in
 
 type-safe mock stub:
 ```go
-// mock of /Users/x/gopath/src/github.com/xhd2015/go-mock/example/demo/biz/biz.go:
+// mock of /Users/x/gopath/src/github.com/xhd2015/go-inspect/example/demo/biz/biz.go:
 // Code generated by go-mock; DO NOT EDIT.
 
 package biz
 
 import (
     "context"
-    "github.com/xhd2015/go-mock/example/demo/biz"
-    _mock "github.com/xhd2015/go-mock/mock"
+    "github.com/xhd2015/go-inspect/example/demo/biz"
+    _mock "github.com/xhd2015/go-inspect/mock"
 )
 
 const _SKIP_MOCK = true
-const FULL_PKG_NAME = "github.com/xhd2015/go-mock/example/demo/biz"
+const FULL_PKG_NAME = "github.com/xhd2015/go-inspect/example/demo/biz"
 
 func Setup(ctx context.Context,setup func(m *M)) context.Context {
     m:=M{}

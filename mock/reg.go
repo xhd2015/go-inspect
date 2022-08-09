@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/xhd2015/go-mock/inspect/serialize"
-	"github.com/xhd2015/go-mock/inspect/typeinfo"
+	"github.com/xhd2015/go-inspect/inspect/serialize"
+	"github.com/xhd2015/go-inspect/inspect/typeinfo"
 )
 
 type MockStubRegistry struct {

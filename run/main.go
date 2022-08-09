@@ -12,18 +12,18 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/xhd2015/go-mock/cmdsupport"
-	"github.com/xhd2015/go-mock/inspect"
-	_ "github.com/xhd2015/go-mock/inspect/mock" // for generated code to include mock correctly
+	"github.com/xhd2015/go-inspect/cmdsupport"
+	"github.com/xhd2015/go-inspect/inspect"
+	_ "github.com/xhd2015/go-inspect/inspect/mock" // for generated code to include mock correctly
 )
 
 // example:
-//   $ go run github.com/xhd2015/go-mock help
-//   $ go run github.com/xhd2015/go-mock print ./example/rewrite_example.go
-//   $ go run github.com/xhd2015/go-mock rewrite -v ./inspect/testdata/demo/demo.go
-//   $ go run github.com/xhd2015/go-mock build -v -debug ./inspect/testdata/demo/demo.go
-//   $ go run github.com/xhd2015/go-mock print ./inspect/testdata/print/print.go
-//   $ go run github.com/xhd2015/go-mock run ./inspect/testdata/simple_run/simple_run.go
+//   $ go run github.com/xhd2015/go-inspect help
+//   $ go run github.com/xhd2015/go-inspect print ./example/rewrite_example.go
+//   $ go run github.com/xhd2015/go-inspect rewrite -v ./inspect/testdata/demo/demo.go
+//   $ go run github.com/xhd2015/go-inspect build -v -debug ./inspect/testdata/demo/demo.go
+//   $ go run github.com/xhd2015/go-inspect print ./inspect/testdata/print/print.go
+//   $ go run github.com/xhd2015/go-inspect run -v ./inspect/testdata/simple_run/simple_run.go
 
 var debug = flag.Bool("debug", false, "build debug(available for: build,run)")
 var output = flag.String("o", "", "output executable(default: exec.bin,exec-test.bin,debug.bin or debug-test.bin,available for: build,run,test)")
@@ -192,25 +192,32 @@ func getRewriteOptions() *cmdsupport.GenRewriteOptions {
 	initRewriteConfigs()
 	filterFn := createFilter(*filter)
 
-	var loadArgs []string
-	if *mod != "" {
-		loadArgs = append(loadArgs, "-mod="+*mod)
-	}
 	return &cmdsupport.GenRewriteOptions{
 		Verbose:        *verbose,
 		VerboseCopy:    *veryVerbose,
 		VerboseRewrite: *veryVerbose,
 		SkipGenMock:    !*enableMockGen,
-		OnlyPackages:   getOnlyPkgs(),
-		Packages:       cfg.pkgsMap,
-		Modules:        cfg.modsMap,
-		AllowMissing:   getAllowMissing(),
-		Force:          *force,
-		ForTest:        *testMode,
-		LoadArgs:       loadArgs,
+		PkgFilterOptions: cmdsupport.PkgFilterOptions{
+			OnlyPackages: getOnlyPkgs(),
+			Packages:     cfg.pkgsMap,
+			Modules:      cfg.modsMap,
+			AllowMissing: getAllowMissing(),
+		},
+		Force:       *force,
+		LoadOptions: *getLoadOptions(),
 		RewriteOptions: &inspect.RewriteOptions{
 			Filter: filterFn,
 		},
+	}
+}
+func getLoadOptions() *cmdsupport.LoadOptions {
+	var loadArgs []string
+	if *mod != "" {
+		loadArgs = append(loadArgs, "-mod="+*mod)
+	}
+	return &cmdsupport.LoadOptions{
+		ForTest:  *testMode,
+		LoadArgs: loadArgs,
 	}
 }
 
@@ -225,7 +232,7 @@ func print(commd string, args []string, extraArgs []string) {
 	}
 
 	filterFn := createFilter(*filter)
-	cmdsupport.PrintRewrite(args[0], *printRewrite, *printMock, &inspect.RewriteOptions{
+	cmdsupport.PrintRewrite(args[0], *printRewrite, *printMock, getLoadOptions(), &inspect.RewriteOptions{
 		Filter: filterFn,
 	})
 }
@@ -333,19 +340,19 @@ func usage(defaultUsage func()) func() {
 		defaultUsage()
 		fmt.Printf("examples:\n")
 		fmt.Printf("    # build:\n")
-		fmt.Printf("    $  go run -mod=readonly github.com/xhd2015/go-mock build -debug ./src/main.go\n")
+		fmt.Printf("    $  go run -mod=readonly github.com/xhd2015/go-inspect build -debug ./src/main.go\n")
 		fmt.Printf("\n")
 		fmt.Printf("    # run:\n")
-		fmt.Printf("    $  go run -mod=readolny github.com/xhd2015/go-mock run ./src/main.go\n")
+		fmt.Printf("    $  go run -mod=readolny github.com/xhd2015/go-inspect run ./src/main.go\n")
 		fmt.Printf("\n")
 		fmt.Printf("    # run, args passed to the executable after --:\n")
-		fmt.Printf("    $  go run -mod=readonly github.com/xhd2015/go-mock run ./src/main.go -- -config config_dir\n")
+		fmt.Printf("    $  go run -mod=readonly github.com/xhd2015/go-inspect run ./src/main.go -- -config config_dir\n")
 		fmt.Printf("\n")
 		fmt.Printf("    # test:\n")
-		fmt.Printf("    $  go test -mod=readonly github.com/xhd2015/go-mock test ./test/main_test.go -- -config config_dir\n")
+		fmt.Printf("    $  go test -mod=readonly github.com/xhd2015/go-inspect test ./test/main_test.go -- -config config_dir\n")
 		fmt.Printf("\n")
 		fmt.Printf("    # test with coverage:\n")
-		fmt.Printf("    $  go run -mod=readonly github.com/xhd2015/go-mock test -build-flags='-coverprofile=cover.out -coverpkg ./...' -v ./verify_test_cmd/\n")
+		fmt.Printf("    $  go run -mod=readonly github.com/xhd2015/go-inspect test -build-flags='-coverprofile=cover.out -coverpkg ./...' -v ./verify_test_cmd/\n")
 	}
 }
 

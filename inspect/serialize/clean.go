@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/xhd2015/go-mock/inspect/typeinfo"
+	"github.com/xhd2015/go-inspect/inspect/typeinfo"
 )
 
 const _SKIP_MOCK = true // don't mock me
