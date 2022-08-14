@@ -29,6 +29,8 @@ type Registry interface {
 	// Func
 	FuncDecl(node *ast.FuncDecl) FuncContext
 	FuncType(node *ast.FuncType) FuncType
+
+	RangeNodes(fn func(node ast.Node) bool)
 }
 
 type registryBuilder struct {
@@ -137,6 +139,14 @@ func (c *registry) FuncType(node *ast.FuncType) FuncType {
 		return f
 	}
 	return f.(FuncType)
+}
+
+func (c *registry) RangeNodes(fn func(node ast.Node) bool) {
+	for n := range c.parentMap {
+		if !fn(n) {
+			return
+		}
+	}
 }
 
 func (c *registry) mustFileOf(n ast.Node) *ast.File {
