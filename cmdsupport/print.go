@@ -7,9 +7,9 @@ import (
 	"strings"
 
 	"github.com/xhd2015/go-inspect/inspect"
+	api "github.com/xhd2015/go-inspect/inspect"
 	"github.com/xhd2015/go-inspect/inspect/load"
 	"github.com/xhd2015/go-inspect/inspect/util"
-	api "github.com/xhd2015/go-inspect/inspect2"
 )
 
 type LoadOptions struct {

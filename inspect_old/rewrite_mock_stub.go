@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/xhd2015/go-inspect/code/gen"
-	inspect "github.com/xhd2015/go-inspect/inspect2"
+	inspect "github.com/xhd2015/go-inspect/inspect"
 	"golang.org/x/tools/go/packages"
 )
 

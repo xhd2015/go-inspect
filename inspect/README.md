@@ -1,33 +1,23 @@
-# bug records
-## 
-## duplicate error
-```
-func (BaseTemplate) FinishProcess(ctx context.Context, req Request, resp Response, err error) error {
-    ->
-func (unused_Recv0 BaseTemplate) FinishProcess(ctx context.Context, req Request, resp Response, err error)( err error)
-```
+# How to refactor a large and long process function to provide flexible customization to the user?
+The problem is about refactoring. To refactor, we have the following tools:
+- Patterns
+- Recognize the nature of the problem, and reorganize
 
-## name duplicate 
-```
-func (dao *batchPriceDiscountRuleDAOImpl) QueryRecordBySql(ctx context.Context, sql string, filter dao.IPriceDiscountRuleFilter)( Resp_0 []*model.PriceDiscountRule)
-```
+The original large process function relies on some parameters, and some steps.
 
-## go mod replace: wrong when replace target is relative.
-should replace with absolute directory, unless starts with ./
+So the first is to try to propose at least 2 or more scenarios that will fit into this process, and find what is shared among these usages.
 
-## new line type parameters should be stripped, otherwise they cause unmap
-```
-func A(ctx context.Context,
-T int,
-)
-```
+This is a down-to-top solution.
 
-## internal packages
-```
-could not import google.golang.org/grpc/internal/resolver (invalid use of internal package google.golang.org/grpc/internal/resolver)
-```
+# Refactor
+Closing ranges, shrink size of the target function.
 
-# vet generated code
-```bash
-go vet ./test/mock_gen/...
-```
+Provide chances for user to customize some process
+
+Make these customization reasonable, and simple.
+
+
+# Core
+The most important thing we do is connect, connect components with their meaningful context.
+
+For example, build a parent map for all ast nodes, so that we can lookup a node's file without knowing its context.

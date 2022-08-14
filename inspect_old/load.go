@@ -8,8 +8,8 @@ import (
 
 	"golang.org/x/tools/go/packages"
 
+	inspect "github.com/xhd2015/go-inspect/inspect"
 	"github.com/xhd2015/go-inspect/inspect/util"
-	inspect "github.com/xhd2015/go-inspect/inspect2"
 )
 
 func MakePackageMap(pkgs []*packages.Package) map[string]*packages.Package {

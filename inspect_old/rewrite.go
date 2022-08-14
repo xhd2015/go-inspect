@@ -12,8 +12,8 @@ import (
 
 	"github.com/xhd2015/go-inspect/code/edit"
 	"github.com/xhd2015/go-inspect/code/gen"
+	inspect "github.com/xhd2015/go-inspect/inspect"
 	"github.com/xhd2015/go-inspect/inspect/util"
-	inspect "github.com/xhd2015/go-inspect/inspect2"
 )
 
 // this file provides source file rewrite and mock stub generation.
