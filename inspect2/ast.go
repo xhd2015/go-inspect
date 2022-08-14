@@ -21,10 +21,6 @@ type Node interface {
 	ASTNode() ast.Node
 }
 
-// type GeneralNode struct {
-
-// }
-
 type FileContext interface {
 	Global() Global
 	Pkg() Pkg
@@ -45,7 +41,8 @@ type FileContext interface {
 type FuncContext interface {
 	File() FileContext
 
-	Name() string // func name
+	Name() string           // func name
+	QuanlifiedName() string // <type>.<name> or *<type>.<name>
 
 	AST() *ast.FuncDecl
 	ASTNode() ast.Node
@@ -252,6 +249,17 @@ func (c *funcImpl) ASTNode() ast.Node {
 }
 func (c *funcImpl) Name() string {
 	return c.ast.Name.Name
+}
+func (c *funcImpl) QuanlifiedName() string {
+	rcv := c.Recv()
+	if rcv == nil {
+		return c.Name()
+	}
+	ptr, n := rcv.TypeExpr().ResolveType().GetNamedOrPtr()
+	if ptr {
+		return "*" + n.Obj().Name() + "." + c.Name()
+	}
+	return n.Obj().Name() + "." + c.Name()
 }
 
 // Body implements FuncContext

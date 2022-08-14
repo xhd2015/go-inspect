@@ -12,6 +12,8 @@ type Visitor interface {
 }
 
 type Visitors struct {
+	// VisitFn is pre action applied, returns true or false
+	// to indicate whether walking its children.
 	VisitFn    func(n ast.Node, session Session) bool
 	VisitEndFn func(n ast.Node, session Session)
 }

@@ -16,6 +16,8 @@ import (
 
 // Registry is an immutable mapping that holds
 // the ast Node to their convienent wrapper
+// types appear here meaning they have special support
+// it is effectively an AST node factory.
 type Registry interface {
 	// File reverse the look up
 	// background: any AST Node must belong to a certain file
@@ -24,7 +26,8 @@ type Registry interface {
 	Pkg(node *ast.Package) Pkg
 	File(node *ast.File) FileContext
 	// Func
-	Func(node *ast.FuncDecl) FuncContext
+	FuncDecl(node *ast.FuncDecl) FuncContext
+	FuncType(node *ast.FuncType) FuncType
 }
 
 type registryBuilder struct {
@@ -48,31 +51,22 @@ func (c *registryBuilder) addPkgs(pkgs func(func(pkg Pkg) bool)) {
 		return true
 	})
 }
+
 func (c *registryBuilder) addPkg(pkg Pkg) {
 	c.r.pkgMap[pkg.AST()] = pkg
 	pkg.RangeFiles(func(i int, f FileContext) bool {
 		c.r.fileMap[f.AST()] = f
-		ast.Walk(c, f.AST())
+
+		TraverseNodeParentMap(f.AST(), func(n, parent ast.Node) bool {
+			c.r.parentMap[n] = parent
+			return true
+		})
+
 		if len(c.stack) != 0 {
 			panic(fmt.Errorf("internal error: stack not balanced"))
 		}
 		return true
 	})
-}
-
-// Visit implements ast.Visitor
-func (c *registryBuilder) Visit(node ast.Node) (w ast.Visitor) {
-	if node == nil {
-		c.stack = c.stack[:len(c.stack)-1]
-	} else {
-		var parent ast.Node
-		if len(c.stack) > 0 {
-			parent = c.stack[len(c.stack)-1]
-		}
-		c.r.parentMap[node] = parent
-		c.stack = append(c.stack, node)
-	}
-	return c
 }
 
 func (c *registryBuilder) build() Registry {
@@ -112,7 +106,7 @@ func (c *registry) File(node *ast.File) FileContext {
 }
 
 // Func implements Registry
-func (c *registry) Func(node *ast.FuncDecl) FuncContext {
+func (c *registry) FuncDecl(node *ast.FuncDecl) FuncContext {
 	if node == nil {
 		return nil
 	}
@@ -123,6 +117,20 @@ func (c *registry) Func(node *ast.FuncDecl) FuncContext {
 		return f
 	}
 	return f.(FuncContext)
+}
+
+// Func implements Registry
+func (c *registry) FuncType(node *ast.FuncType) FuncType {
+	if node == nil {
+		return nil
+	}
+	f := c.nodeMap[node]
+	if f == nil {
+		f := NewFuncType(c.fileMap[c.mustFileOf(node)].Pkg(), node)
+		c.nodeMap[node] = f
+		return f
+	}
+	return f.(FuncType)
 }
 
 func (c *registry) mustFileOf(n ast.Node) *ast.File {

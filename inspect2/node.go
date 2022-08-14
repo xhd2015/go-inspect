@@ -157,3 +157,44 @@ func CombineHooksStr(hooks ...func(node ast.Node, c string) string) func(node as
 	}
 	return cur
 }
+
+type nodeParentFinder struct {
+	fn func(n ast.Node, parent ast.Node) bool
+	// stateful stack
+	stack []ast.Node
+}
+
+// from child to parent
+func BuildNodeParentMap(n ast.Node) map[ast.Node]ast.Node {
+	parentMap := make(map[ast.Node]ast.Node)
+	TraverseNodeParentMap(n, func(n, parent ast.Node) bool {
+		parentMap[n] = parent
+		return true
+	})
+	return parentMap
+}
+
+func TraverseNodeParentMap(n ast.Node, fn func(n ast.Node, parent ast.Node) bool) {
+	vis := &nodeParentFinder{
+		fn: fn,
+	}
+	ast.Walk(vis, n)
+	if len(vis.stack) != 0 {
+		panic(fmt.Errorf("internal error: stack not balanced"))
+	}
+}
+
+// Visit implements ast.Visitor
+func (c *nodeParentFinder) Visit(node ast.Node) (w ast.Visitor) {
+	if node == nil {
+		c.stack = c.stack[:len(c.stack)-1]
+	} else {
+		var parent ast.Node
+		if len(c.stack) > 0 {
+			parent = c.stack[len(c.stack)-1]
+		}
+		c.fn(node, parent)
+		c.stack = append(c.stack, node)
+	}
+	return c
+}

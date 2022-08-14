@@ -56,7 +56,7 @@ func NewMockRewritter(opts *RewriteOptions) inspect.Visitor {
 			}
 
 			if astFunc, ok := n.(*ast.FuncDecl); ok {
-				fn := session.Global().Registry().Func(astFunc)
+				fn := session.Global().Registry().FuncDecl(astFunc)
 				fr := session.FileRewrite(fn.File())
 
 				fd := fileDetailMap[fn.File()]

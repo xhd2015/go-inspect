@@ -15,3 +15,9 @@ Closing ranges, shrink size of the target function.
 Provide chances for user to customize some process
 
 Make these customization reasonable, and simple.
+
+
+# Core
+The most important thing we do is connect, connect components with their meaningful context.
+
+For example, build a parent map for all ast nodes, so that we can lookup a node's file without knowing its context.

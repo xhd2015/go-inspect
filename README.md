@@ -6,31 +6,11 @@ We provide source file parsing, rewriting and building utilities in this reposit
 A more sophisticated usage is [https://github.com/xhd2015/go-inspect](https://github.com/xhd2015/go-inspect).
 
 # Usage
+> NOTE: still in progress
 ## CLI
 ```bash
 # add dependency
 go get github.com/xhd2015/go-inspect
-```
-
-```go
-package main
-
-import "github.com/xhd2015/go-inspect/"
-
-func main(){
-    inspect.Load()
-}
-```
-
-## Customization
-```go
-package main
-
-import "github.com/xhd2015/go-inspect/"
-
-func main(){
-    inspect.Load()
-}
 ```
 
 # How it works?
