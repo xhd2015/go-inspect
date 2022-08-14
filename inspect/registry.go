@@ -21,7 +21,8 @@ import (
 type Registry interface {
 	// File reverse the look up
 	// background: any AST Node must belong to a certain file
-	// FileOf(node ast.Node) FileContext
+	FileOf(node ast.Node) FileContext
+	Parent(node ast.Node) ast.Node
 
 	Pkg(node *ast.Package) Pkg
 	File(node *ast.File) FileContext
@@ -92,10 +93,15 @@ func NewRegistry(parentMap map[ast.Node]ast.Node, nodeMap map[ast.Node]Node, pkg
 	}
 }
 
-// File implements Registry
-// func (c *registry) FileOf(node ast.Node) FileContext {
-// 	return c.fileMap[node]
-// }
+// FileOf implements Registry
+func (c *registry) FileOf(node ast.Node) FileContext {
+	return c.File(c.mustFileOf(node))
+}
+
+// Parent implements Registry
+func (c *registry) Parent(node ast.Node) ast.Node {
+	return c.parentMap[node]
+}
 
 func (c *registry) Pkg(node *ast.Package) Pkg {
 	return c.pkgMap[node]
