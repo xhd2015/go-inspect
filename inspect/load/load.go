@@ -31,7 +31,7 @@ func LoadPackages(args []string, opts *LoadOptions) (inspect.Global, error) {
 	}
 	cfg := &packages.Config{
 		Dir:        absDir,
-		Mode:       packages.NeedFiles | packages.NeedSyntax | packages.NeedDeps | packages.NeedImports | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedModule,
+		Mode:       packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles | packages.NeedTypesSizes | packages.NeedSyntax | packages.NeedDeps | packages.NeedImports | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedModule,
 		Fset:       fset,
 		Tests:      opts.ForTest,
 		BuildFlags: opts.BuildFlags,
