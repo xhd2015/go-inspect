@@ -7,6 +7,12 @@ import (
 
 // Visitor represents a session-associated rewrite
 type Visitor interface {
+	// Visit is firstly called for pkg nodes, then for all children nodes if it
+	// returns true, and recursively do so until end.
+	// NOTE: in go-inspect we manually construct a virtual AST Node for
+	// any Pakcage, making it holds a list of ast files.
+	// So we start by packages, not by file.
+	// You can type check n against *ast.Package, *ast.File, ...
 	Visit(n ast.Node, session Session) bool
 	VisitEnd(n ast.Node, session Session)
 }

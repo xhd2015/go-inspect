@@ -1,4 +1,4 @@
-package cmd
+package rewrite
 
 import (
 	inspect_old "github.com/xhd2015/go-inspect/inspect_old"
@@ -22,7 +22,7 @@ type GenRewriteOptions struct {
 }
 
 type LoadOptions struct {
-	LoadArgs []string // passed to packages.Load
+	BuildFlags []string // passed to packages.Load
 
 	ForTest bool
 }

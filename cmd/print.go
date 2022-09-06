@@ -1,4 +1,4 @@
-package cmdsupport
+package cmd
 
 import (
 	"fmt"
@@ -6,19 +6,13 @@ import (
 	"path"
 	"strings"
 
-	"github.com/xhd2015/go-inspect/inspect"
 	api "github.com/xhd2015/go-inspect/inspect"
 	"github.com/xhd2015/go-inspect/inspect/load"
 	"github.com/xhd2015/go-inspect/inspect/util"
+	inspectold "github.com/xhd2015/go-inspect/inspect_old"
 )
 
-type LoadOptions struct {
-	LoadArgs []string // passed to packages.Load
-
-	ForTest bool
-}
-
-func PrintRewrite(file string, printRewrite bool, printMock bool, loadOpts *LoadOptions, opts *inspect.RewriteOptions) {
+func PrintRewrite(file string, printRewrite bool, printMock bool, loadOpts *LoadOptions, opts *inspectold.RewriteOptions) {
 	if file == "" {
 		panic(fmt.Errorf("requires file"))
 	}
@@ -50,13 +44,13 @@ func PrintRewrite(file string, printRewrite bool, printMock bool, loadOpts *Load
 	g, err := load.LoadPackages([]string{loadPkg}, &load.LoadOptions{
 		ProjectDir: projectDir,
 		ForTest:    loadOpts.ForTest,
-		BuildFlags: loadOpts.LoadArgs,
+		BuildFlags: loadOpts.BuildFlags,
 	})
 	if err != nil {
 		panic(fmt.Errorf("loading packages error:%v", err))
 	}
 
-	rw := inspect.NewMockRewritter(opts)
+	rw := inspectold.NewMockRewritter(opts)
 	session := api.NewSession(g)
 	api.VisitAll(func(f func(pkg api.Pkg) bool) {
 		for _, p := range g.LoadInfo().StarterPkgs() {

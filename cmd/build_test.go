@@ -1,4 +1,4 @@
-package cmdsupport
+package cmd
 
 import (
 	"testing"

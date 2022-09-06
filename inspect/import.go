@@ -77,6 +77,7 @@ func NewImportList_X(initImports func(fn func(pkg string, name string, alias str
 // It do extra work to ensure that only one effective name exists in the list.
 // This involves rewritting
 // This makes a pkg path has only one name.
+// FIXME: with "fmt" imported, no other "fmt" imports; MustImport("fmt","fmt","fmt2",nil) gives "fmt2" without import fmt2 "fmt", should fix this.
 func (c *importList) MustImport(pkgPath string, name string, suggestAlias string, forbidden func(name string) bool) string {
 	c.checkName(pkgPath, name)
 	use := suggestAlias

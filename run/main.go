@@ -12,9 +12,10 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/xhd2015/go-inspect/cmdsupport"
-	"github.com/xhd2015/go-inspect/inspect"
-	_ "github.com/xhd2015/go-inspect/inspect/mock" // for generated code to include mock correctly
+	"github.com/xhd2015/go-inspect/cmd"
+	inspectold "github.com/xhd2015/go-inspect/inspect_old"
+	rewritepkg "github.com/xhd2015/go-inspect/rewrite"
+	// _ "github.com/xhd2015/go-inspect/inspect/mock" // for generated code to include mock correctly
 )
 
 // example:
@@ -186,18 +187,18 @@ func help(commd string, args []string, extraArgs []string) {
 }
 
 func rewrite(commd string, args []string, extraArgs []string) {
-	cmdsupport.GenRewrite(args, cmdsupport.GetRewriteRoot(), getRewriteOptions())
+	cmd.GenRewrite(args, cmd.GetRewriteRoot(), getRewriteOptions())
 }
-func getRewriteOptions() *cmdsupport.GenRewriteOptions {
+func getRewriteOptions() *cmd.GenRewriteOptions {
 	initRewriteConfigs()
 	filterFn := createFilter(*filter)
 
-	return &cmdsupport.GenRewriteOptions{
+	return &cmd.GenRewriteOptions{
 		Verbose:        *verbose,
 		VerboseCopy:    *veryVerbose,
 		VerboseRewrite: *veryVerbose,
 		SkipGenMock:    !*enableMockGen,
-		PkgFilterOptions: cmdsupport.PkgFilterOptions{
+		PkgFilterOptions: cmd.PkgFilterOptions{
 			OnlyPackages: getOnlyPkgs(),
 			Packages:     cfg.pkgsMap,
 			Modules:      cfg.modsMap,
@@ -205,19 +206,19 @@ func getRewriteOptions() *cmdsupport.GenRewriteOptions {
 		},
 		Force:       *force,
 		LoadOptions: *getLoadOptions(),
-		RewriteOptions: &inspect.RewriteOptions{
+		RewriteOptions: &inspectold.RewriteOptions{
 			Filter: filterFn,
 		},
 	}
 }
-func getLoadOptions() *cmdsupport.LoadOptions {
+func getLoadOptions() *rewritepkg.LoadOptions {
 	var loadArgs []string
 	if *mod != "" {
 		loadArgs = append(loadArgs, "-mod="+*mod)
 	}
-	return &cmdsupport.LoadOptions{
-		ForTest:  *testMode,
-		LoadArgs: loadArgs,
+	return &rewritepkg.LoadOptions{
+		ForTest:    *testMode,
+		BuildFlags: loadArgs,
 	}
 }
 
@@ -232,12 +233,12 @@ func print(commd string, args []string, extraArgs []string) {
 	}
 
 	filterFn := createFilter(*filter)
-	cmdsupport.PrintRewrite(args[0], *printRewrite, *printMock, getLoadOptions(), &inspect.RewriteOptions{
+	cmd.PrintRewrite(args[0], *printRewrite, *printMock, getLoadOptions(), &inspectold.RewriteOptions{
 		Filter: filterFn,
 	})
 }
 
-func getBuildOptions() *cmdsupport.BuildOptions {
+func getBuildOptions() *cmd.BuildOptions {
 	goFlags := *buildFlags
 	if *coverProfile != "" {
 		goFlags = "-coverprofile=" + *coverProfile + " " + goFlags
@@ -248,7 +249,7 @@ func getBuildOptions() *cmdsupport.BuildOptions {
 	if *mod != "" {
 		goFlags = "-mod=" + *mod + " " + goFlags
 	}
-	return &cmdsupport.BuildOptions{
+	return &cmd.BuildOptions{
 		Verbose: *verbose,
 		Debug:   *debug,
 		Output:  *output,
@@ -258,7 +259,7 @@ func getBuildOptions() *cmdsupport.BuildOptions {
 }
 
 func build(commd string, args []string, extraArgs []string) {
-	cmdsupport.BuildRewrite(args, getRewriteOptions(), getBuildOptions())
+	cmd.BuildRewrite(args, getRewriteOptions(), getBuildOptions())
 }
 func getAllowMissing() bool {
 	return cfg.AllowMissing != "error"
@@ -269,9 +270,9 @@ func run(commd string, args []string, extraArgs []string) {
 		test(commd, args, extraArgs)
 		return
 	}
-	buildResult := cmdsupport.BuildRewrite(args, getRewriteOptions(), getBuildOptions())
+	buildResult := cmd.BuildRewrite(args, getRewriteOptions(), getBuildOptions())
 
-	bashCmd := cmdsupport.Quotes(append([]string{buildResult.Output}, extraArgs...)...)
+	bashCmd := cmd.Quotes(append([]string{buildResult.Output}, extraArgs...)...)
 	if *verbose {
 		log.Printf("%s", bashCmd)
 	}
@@ -290,7 +291,7 @@ func test(commd string, args []string, extraArgs []string) {
 	buildOpts := getBuildOptions()
 	buildOpts.ForTest = true
 	rwOpts.ForTest = true
-	buildResult := cmdsupport.BuildRewrite(args, rwOpts, buildOpts)
+	buildResult := cmd.BuildRewrite(args, rwOpts, buildOpts)
 
 	if *coverProfile != "" {
 		oldArgs := extraArgs
@@ -298,7 +299,7 @@ func test(commd string, args []string, extraArgs []string) {
 		extraArgs = append(extraArgs, oldArgs...)
 	}
 
-	bashCmd := cmdsupport.Quotes(append([]string{buildResult.Output}, extraArgs...)...)
+	bashCmd := cmd.Quotes(append([]string{buildResult.Output}, extraArgs...)...)
 	if *verbose {
 		log.Printf("%s", bashCmd)
 	}

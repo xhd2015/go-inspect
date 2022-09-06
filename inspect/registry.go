@@ -21,6 +21,7 @@ import (
 type Registry interface {
 	// File reverse the look up
 	// background: any AST Node must belong to a certain file
+	// NOTE: except Package node.
 	FileOf(node ast.Node) FileContext
 	Parent(node ast.Node) ast.Node
 

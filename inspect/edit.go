@@ -69,6 +69,8 @@ type Edit interface {
 
 type GoRewriteEdit interface {
 	Edit
+
+	// MustImport import `pkgPath` with `name`, returns the actual name used.
 	MustImport(pkgPath string, name string, suggestAlias string, forbidden func(name string) bool) string
 
 	// can always work

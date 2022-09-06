@@ -1,4 +1,4 @@
-package cmdsupport
+package cmd
 
 import (
 	"fmt"
@@ -46,7 +46,10 @@ func BuildRewrite(args []string, genOpts *GenRewriteOptions, opts *BuildOptions)
 	}
 	genOpts.ProjectDir = opts.ProjectRoot
 
-	res := GenRewrite(args, GetRewriteRoot(), genOpts)
+	res, err := GenRewrite(args, GetRewriteRoot(), genOpts)
+	if err != nil {
+		panic(err)
+	}
 	opts.mappedMod = res.MappedMod
 	opts.newGoROOT = res.UseNewGOROOT
 	return Build(args, opts)
@@ -262,12 +265,4 @@ func CopyDirs(srcDirs []string, destRoot string, opts CopyOpts) error {
 		cmdList,
 		opts.Verbose,
 	)
-}
-
-// go's replace cannot have '@' character, so we replace it with ver_
-// this is used for files to be copied into tmp dir, and will appear on replace verb.
-func cleanGoFsPath(s string) string {
-	// example:
-	// /Users/xhd2015/Projects/gopath/pkg/mod/google.golang.org/grpc@v1.47.0/xds
-	return strings.ReplaceAll(s, "@", "/")
 }
