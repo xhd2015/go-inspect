@@ -3,7 +3,6 @@ package inspect
 import (
 	"fmt"
 	"go/ast"
-	"go/token"
 	"go/types"
 	"io/ioutil"
 	"strings"
@@ -180,15 +179,13 @@ func (c *file) ASTNode() ast.Node {
 func (c *file) EditImports(edit Edit) ImportListContext {
 	first := true
 	insertPos := c.ast.Name.End()
-	offset := 0
 	addImport := func(use, pkg string) {
-		st := "import " + util.FormatImport(pkg, use) + ";"
+		st := "import " + util.FormatImport(use, pkg) + ";"
 		if first {
 			st = ";" + st
 			first = false
 		}
-		edit.Insert(insertPos+token.Pos(offset), st)
-		offset += len(st)
+		edit.Insert(insertPos, st)
 	}
 	return NewImportList_X(func(fn func(pkg string, name string, alias string)) {
 		for _, imp := range c.ast.Imports {
