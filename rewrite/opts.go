@@ -1,32 +1,5 @@
 package rewrite
 
-import (
-	inspect_old "github.com/xhd2015/go-inspect/inspect_old"
-)
-
-type GenRewriteOptions struct {
-	Verbose        bool
-	VerboseCopy    bool
-	VerboseRewrite bool
-	// VerboseGomod   bool
-	ProjectDir     string // the project dir
-	RewriteOptions *inspect_old.RewriteOptions
-	StubGenDir     string // relative path, default test/mock_gen
-	SkipGenMock    bool
-
-	PkgFilterOptions
-
-	Force bool // force indicates no cache
-
-	LoadOptions
-}
-
-type LoadOptions struct {
-	BuildFlags []string // passed to packages.Load
-
-	ForTest bool
-}
-
 type PkgFilterOptions struct {
 	OnlyPackages map[string]bool
 	Packages     map[string]bool

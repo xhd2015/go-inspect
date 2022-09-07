@@ -6,9 +6,8 @@ import (
 	"log"
 	"os"
 	"path"
-	"strings"
 
-	"github.com/xhd2015/go-inspect/inspect/util"
+	"github.com/xhd2015/go-inspect/rewrite"
 	"github.com/xhd2015/go-inspect/sh"
 )
 
@@ -17,26 +16,9 @@ func GetRewriteRoot() string {
 	return path.Join(os.TempDir(), "go-rewrite")
 }
 
-type BuildOptions struct {
-	Verbose     bool
-	ProjectRoot string // default CWD
-	Debug       bool
-	Output      string
-	ForTest     bool
-	GoFlags     string
-	// extra trim path map to be applied
-	// cleanedModOrigAbsDir - modOrigAbsDir
-	mappedMod map[string]string
-	newGoROOT string
-}
-
-type BuildResult struct {
-	Output string
-}
-
-func BuildRewrite(args []string, genOpts *GenRewriteOptions, opts *BuildOptions) *BuildResult {
+func BuildRewrite(args []string, genOpts *GenRewriteOptions, opts *rewrite.BuildOptions) (*rewrite.BuildResult, error) {
 	if opts == nil {
-		opts = &BuildOptions{}
+		opts = &rewrite.BuildOptions{}
 	}
 	verbose := opts.Verbose
 	if genOpts == nil {
@@ -46,137 +28,15 @@ func BuildRewrite(args []string, genOpts *GenRewriteOptions, opts *BuildOptions)
 	}
 	genOpts.ProjectDir = opts.ProjectRoot
 
-	res, err := GenRewrite(args, GetRewriteRoot(), genOpts)
-	if err != nil {
-		panic(err)
-	}
-	opts.mappedMod = res.MappedMod
-	opts.newGoROOT = res.UseNewGOROOT
-	return Build(args, opts)
-}
-
-func Build(args []string, opts *BuildOptions) *BuildResult {
-	if opts == nil {
-		opts = &BuildOptions{}
-	}
-	verbose := opts.Verbose
-	debug := opts.Debug
-	mappedMod := opts.mappedMod
-	newGoROOT := opts.newGoROOT
-	forTest := opts.ForTest
-	goFlags := opts.GoFlags
-	// project root
-	projectRoot := ""
-	if opts != nil {
-		projectRoot = opts.ProjectRoot
-	}
-	var err error
-	projectRoot, err = util.ToAbsPath(projectRoot)
-	if err != nil {
-		panic(err)
-	}
-	// output
-	output := ""
-	if opts != nil && opts.Output != "" {
-		output = opts.Output
-		if !path.IsAbs(output) {
-			output, err = util.ToAbsPath(output)
-			if err != nil {
-				panic(fmt.Errorf("make abs path err:%v", err))
-			}
-		}
-	} else {
-		output = "exec"
-		if debug {
-			output = "debug"
-		}
-		if forTest {
-			output = output + "-test"
-		}
-		output = output + ".bin"
-		if !path.IsAbs(output) {
-			output = path.Join(projectRoot, output)
-		}
-	}
-
-	var gcflagList []string
-
-	// root dir is errous:
-	//     /path/to/rewrite-root=>/
-	//     //Users/x/gopath/pkg/mod/github.com/xhd2015/go-inspect/v1/src/db/impl/util.go
-	//
-	// so replacement must have at least one child:
-	//     /path/to/rewrite-root/X=>/X
 	rewriteRoot := GetRewriteRoot()
-	root, err := util.ToAbsPath(rewriteRoot)
+	res, err := GenRewrite(args, rewriteRoot, genOpts)
 	if err != nil {
-		panic(fmt.Errorf("get absolute path failed:%v %v", rewriteRoot, err))
-	}
-	if debug {
-		gcflagList = append(gcflagList, "-N", "-l")
-	}
-	fmtTrimPath := func(from, to string) string {
-		if to == "" {
-			// cannot be empty, dlv does not support relative path
-			panic(fmt.Errorf("trimPath to must not be empty:%v", from))
-		}
-		if to == "/" {
-			log.Printf("WARNING trim path found / replacement, should contains at least one child:from=%v, to=%v", from, to)
-		}
-		return fmt.Sprintf("%s=>%s", from, to)
-	}
-	newWorkRoot := path.Join(root, projectRoot)
-	trimList := []string{fmtTrimPath(newWorkRoot, projectRoot)}
-	for origAbsDir, cleanedAbsDir := range mappedMod {
-		trimList = append(trimList, fmtTrimPath(path.Join(root, cleanedAbsDir), origAbsDir))
-	}
-	gcflagList = append(gcflagList, fmt.Sprintf("-trimpath=%s", strings.Join(trimList, ";")))
-	outputFlags := ""
-	if output != "" {
-		outputFlags = fmt.Sprintf(`-o %s`, Quote(output))
-	}
-	gcflags := " "
-	if len(gcflagList) > 0 {
-		gcflags = "-gcflags=all=" + Quotes(gcflagList...)
-	}
-
-	// NOTE: can only specify -gcflags once, the last flag wins.
-	// example:
-	//     MOD=$(go list -m);W=${workspaceFolder};R=/var/folders/y8/kmfy7f8s5bb5qfsp0z8h7j5m0000gq/T/go-rewrite;D=$R$W;cd $D;DP=$(cd $D;cd ..;pwd); with-go1.14 go build -gcflags="all=-N -l -trimpath=/var/folders/y8/kmfy7f8s5bb5qfsp0z8h7j5m0000gq/T/go-rewrite/Users/xhd2015/Projects/gopath/src/github.com/xhd2015/go-inspect=>/Users/xhd2015/Projects/gopath/src/github.com/xhd2015/go-inspect" -o /tmp/xgo/${workspaceFolderBasename}/inspect_rewrite.with_go_mod.bin ./support/xgo/inspect/testdata/inspect_rewrite.go
-	cmdList := []string{
-		"set -e",
-		// fmt.Sprintf("REWRITE_ROOT=%s", quote(root)),
-		// fmt.Sprintf("PROJECT_ROOT=%s", quote(projectRoot)),
-		fmt.Sprintf("cd %s", Quote(newWorkRoot)),
-	}
-	if newGoROOT != "" {
-		cmdList = append(cmdList, fmt.Sprintf("export GOROOT=%s", Quote(path.Join(root, newGoROOT))))
-	}
-	buildCmd := "build"
-	if forTest {
-		buildCmd = "test -c"
-	}
-	goFlagsSpace := ""
-	if goFlags != "" {
-		goFlagsSpace = " " + goFlags
-	}
-	cmdList = append(cmdList, fmt.Sprintf(`go %s %s %s%s %s`, buildCmd, outputFlags, Quote(gcflags), goFlagsSpace, sh.JoinArgs(args)))
-
-	_, _, err = sh.RunBashWithOpts(cmdList, sh.RunBashOptions{
-		Verbose: verbose,
-	})
-	if err != nil {
-		log.Printf("build %s failed", output)
 		panic(err)
 	}
-
-	if verbose {
-		log.Printf("build successful: %s", output)
-	}
-
-	return &BuildResult{
-		Output: output,
-	}
+	opts.RebaseRoot = rewriteRoot
+	opts.MappedMod = res.MappedMod
+	opts.NewGoROOT = res.UseNewGOROOT
+	return rewrite.Build(args, opts)
 }
 
 var Quotes = sh.Quotes

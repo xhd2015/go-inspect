@@ -2,7 +2,7 @@ package cmd
 
 import "github.com/xhd2015/go-inspect/rewrite"
 
-type GenRewriteOptions = rewrite.GenRewriteOptions
+type GenRewriteOptions = rewrite.BuildRewriteOptions
 type GenRewriteResult = rewrite.GenRewriteResult
 type PkgFilterOptions = rewrite.PkgFilterOptions
 type Content = rewrite.Content

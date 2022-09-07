@@ -101,10 +101,10 @@ func CleanGoFsPath(s string) string {
 //
 // the second phase of filecopy.SyncGenerated:
 // overlay, which is for generated file.
-func GenRewrite(args []string, rootDir string, ctrl Controller, rewritter inspect.Visitor, opts *GenRewriteOptions) (res *GenRewriteResult, err error) {
+func GenRewrite(args []string, rootDir string, ctrl Controller, rewritter inspect.Visitor, opts *BuildRewriteOptions) (res *GenRewriteResult, err error) {
 	res = &GenRewriteResult{}
 	if opts == nil {
-		opts = &GenRewriteOptions{}
+		opts = &BuildRewriteOptions{}
 	}
 	verbose := opts.Verbose
 	verboseCopy := opts.VerboseCopy
@@ -136,7 +136,7 @@ func GenRewrite(args []string, rootDir string, ctrl Controller, rewritter inspec
 	g, err := load.LoadPackages(args, &load.LoadOptions{
 		ProjectDir: projectDir,
 		ForTest:    opts.ForTest,
-		BuildFlags: opts.BuildFlags,
+		BuildFlags: opts.LoadArgs,
 	})
 	if err != nil {
 		err = fmt.Errorf("loading packages err: %v", err)
@@ -173,11 +173,6 @@ func GenRewrite(args []string, rootDir string, ctrl Controller, rewritter inspec
 				}
 			}
 		}
-	}
-
-	rewriteOpts := opts.RewriteOptions
-	if rewriteOpts == nil {
-		rewriteOpts = &inspect_old.RewriteOptions{}
 	}
 
 	// expand to all packages under the same module that depended by starter packages

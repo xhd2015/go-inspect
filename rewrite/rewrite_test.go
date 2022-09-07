@@ -44,7 +44,7 @@ func TestRewriteSimple(t *testing.T) {
 			return true
 		},
 	}
-	res, err := GenRewrite([]string{"./"}, rewriteRoot, ctrl, vis, &GenRewriteOptions{
+	res, err := GenRewrite([]string{"./"}, rewriteRoot, ctrl, vis, &BuildRewriteOptions{
 		ProjectDir: "./testdata/simple",
 		Verbose:    true,
 		Force:      true,

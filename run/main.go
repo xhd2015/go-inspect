@@ -238,7 +238,7 @@ func print(commd string, args []string, extraArgs []string) {
 	})
 }
 
-func getBuildOptions() *cmd.BuildOptions {
+func getBuildOptions() *rewritepkg.BuildOptions {
 	goFlags := *buildFlags
 	if *coverProfile != "" {
 		goFlags = "-coverprofile=" + *coverProfile + " " + goFlags
@@ -249,7 +249,7 @@ func getBuildOptions() *cmd.BuildOptions {
 	if *mod != "" {
 		goFlags = "-mod=" + *mod + " " + goFlags
 	}
-	return &cmd.BuildOptions{
+	return &rewritepkg.BuildOptions{
 		Verbose: *verbose,
 		Debug:   *debug,
 		Output:  *output,
@@ -270,7 +270,10 @@ func run(commd string, args []string, extraArgs []string) {
 		test(commd, args, extraArgs)
 		return
 	}
-	buildResult := cmd.BuildRewrite(args, getRewriteOptions(), getBuildOptions())
+	buildResult, err := cmd.BuildRewrite(args, getRewriteOptions(), getBuildOptions())
+	if err != nil {
+		log.Fatalf("build failed: %v", err)
+	}
 
 	bashCmd := cmd.Quotes(append([]string{buildResult.Output}, extraArgs...)...)
 	if *verbose {
@@ -280,7 +283,7 @@ func run(commd string, args []string, extraArgs []string) {
 
 	execCmd.Stderr = os.Stderr
 	execCmd.Stdout = os.Stdout
-	err := execCmd.Run()
+	err = execCmd.Run()
 	if err != nil {
 		log.Fatalf("failed to run %s", buildResult.Output)
 	}
@@ -291,7 +294,10 @@ func test(commd string, args []string, extraArgs []string) {
 	buildOpts := getBuildOptions()
 	buildOpts.ForTest = true
 	rwOpts.ForTest = true
-	buildResult := cmd.BuildRewrite(args, rwOpts, buildOpts)
+	buildResult, err := cmd.BuildRewrite(args, rwOpts, buildOpts)
+	if err != nil {
+		log.Fatalf("build failed: %v", err)
+	}
 
 	if *coverProfile != "" {
 		oldArgs := extraArgs
@@ -307,7 +313,7 @@ func test(commd string, args []string, extraArgs []string) {
 
 	execCmd.Stderr = os.Stderr
 	execCmd.Stdout = os.Stdout
-	err := execCmd.Run()
+	err = execCmd.Run()
 	if err != nil {
 		log.Fatalf("failed to run %s", buildResult.Output)
 	}
