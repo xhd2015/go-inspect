@@ -136,7 +136,7 @@ func GenRewrite(args []string, rootDir string, ctrl Controller, rewritter inspec
 	g, err := load.LoadPackages(args, &load.LoadOptions{
 		ProjectDir: projectDir,
 		ForTest:    opts.ForTest,
-		BuildFlags: opts.LoadArgs,
+		BuildFlags: opts.GoFlags,
 	})
 	if err != nil {
 		err = fmt.Errorf("loading packages err: %v", err)

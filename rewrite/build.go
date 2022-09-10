@@ -29,7 +29,7 @@ type BuildOptions struct {
 	Debug       bool
 	Output      string
 	ForTest     bool
-	GoFlags     string
+	GoFlags     []string
 	// extra trim path map to be applied
 	// cleanedModOrigAbsDir - modOrigAbsDir
 	MappedMod map[string]string
@@ -45,14 +45,13 @@ type BuildRewriteOptions struct {
 
 	Force bool // force indicates no cache
 
-	// for package load
-	LoadArgs []string // passed to packages.Load
+	// for load & build
+	ForTest bool
+	GoFlags []string // passed to load packages,go build
 
 	// for build
-	Debug   bool
-	Output  string
-	ForTest bool
-	GoFlags string // passed to go build
+	Debug  bool
+	Output string
 }
 
 func buildRewrite(args []string, ctrl Controller, rewritter inspect.Visitor, opts *BuildRewriteOptions) (*BuildResult, error) {
@@ -186,8 +185,8 @@ func build(args []string, opts *BuildOptions) (result *BuildResult, err error) {
 		buildCmd = "test -c"
 	}
 	goFlagsSpace := ""
-	if goFlags != "" {
-		goFlagsSpace = " " + goFlags
+	if len(goFlags) > 0 {
+		goFlagsSpace = " " + sh.Quotes(goFlags...)
 	}
 	cmdList = append(cmdList, fmt.Sprintf(`go %s %s %s%s %s`, buildCmd, outputFlags, sh.Quote(gcflags), goFlagsSpace, sh.JoinArgs(args)))
 
