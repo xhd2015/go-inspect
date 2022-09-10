@@ -3,6 +3,8 @@ package inspect
 import (
 	"fmt"
 	"go/ast"
+	"go/token"
+	"sync"
 )
 
 // This is a pattern we used, we call it
@@ -32,6 +34,8 @@ type Registry interface {
 	FuncType(node *ast.FuncType) FuncType
 
 	RangeNodes(fn func(node ast.Node) bool)
+	// expose a Node map keyed by position
+	GetNodeByPos(start token.Pos, end token.Pos) ast.Node
 }
 
 type registryBuilder struct {
@@ -82,6 +86,9 @@ type registry struct {
 	nodeMap   map[ast.Node]Node
 	pkgMap    map[*ast.Package]Pkg
 	fileMap   map[*ast.File]FileContext
+
+	posMapInit sync.Once
+	posMap     posMap
 }
 
 var _ Registry = ((*registry)(nil))
@@ -149,6 +156,12 @@ func (c *registry) RangeNodes(fn func(node ast.Node) bool) {
 		}
 	}
 }
+func (c *registry) GetNodeByPos(start token.Pos, end token.Pos) ast.Node {
+	c.posMapInit.Do(func() {
+		c.posMap = makePos2NodeMap(c)
+	})
+	return c.posMap.Get(start, end)
+}
 
 func (c *registry) mustFileOf(n ast.Node) *ast.File {
 	var ok bool
@@ -159,4 +172,24 @@ func (c *registry) mustFileOf(n ast.Node) *ast.File {
 		}
 	}
 	panic(fmt.Errorf("no file found for:%v", n))
+}
+
+type posMap map[nodePosInfo]ast.Node
+
+type nodePosInfo struct {
+	start token.Pos
+	end   token.Pos
+}
+
+func (c posMap) Get(start token.Pos, end token.Pos) ast.Node {
+	return c[nodePosInfo{start: start, end: end}]
+}
+
+func makePos2NodeMap(reg Registry) posMap {
+	posMap := make(posMap)
+	reg.RangeNodes(func(node ast.Node) bool {
+		posMap[nodePosInfo{start: node.Pos(), end: node.End()}] = node
+		return true
+	})
+	return posMap
 }

@@ -3,16 +3,16 @@ package analysis
 import (
 	"fmt"
 	"go/ast"
-	"go/token"
 	"log"
 	"strings"
 
-	"github.com/xhd2015/go-inspect/inspect"
-	"github.com/xhd2015/go-inspect/inspect/load"
 	"golang.org/x/tools/go/callgraph"
 	"golang.org/x/tools/go/packages"
 	"golang.org/x/tools/go/pointer"
 	"golang.org/x/tools/go/ssa/ssautil"
+
+	"github.com/xhd2015/go-inspect/inspect"
+	"github.com/xhd2015/go-inspect/inspect/load"
 )
 
 type Matcher interface {
@@ -150,25 +150,11 @@ func FindMatch(g inspect.Global, loadPkgs []*packages.Package, m Matcher) (nodeM
 	// in flatten style.
 	dependencyMap := make(map[*callgraph.Node]map[*callgraph.Node]bool)
 
-	type posInfo struct {
-		start token.Pos
-		end   token.Pos
-	}
-
-	posMap := make(map[posInfo]ast.Node)
-	g.Registry().RangeNodes(func(node ast.Node) bool {
-		posMap[posInfo{start: node.Pos(), end: node.End()}] = node
-		return true
-	})
-
-	posToNode := func(start token.Pos, end token.Pos) ast.Node {
-		return posMap[posInfo{start: start, end: end}]
-	}
 	origAstNode := func(n ast.Node) ast.Node {
 		if n == nil {
 			return nil
 		}
-		return posToNode(n.Pos(), n.End())
+		return g.Registry().GetNodeByPos(n.Pos(), n.End())
 	}
 
 	// TODO: handle cyclic reference

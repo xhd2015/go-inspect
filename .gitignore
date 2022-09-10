@@ -3,3 +3,5 @@
 exec.bin
 debug.bin
 go.mod.tmp
+
+*.tmp.json
