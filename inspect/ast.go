@@ -3,6 +3,7 @@ package inspect
 import (
 	"fmt"
 	"go/ast"
+	"go/token"
 	"go/types"
 	"io/ioutil"
 	"strings"
@@ -29,6 +30,12 @@ type FileContext interface {
 
 	AST() *ast.File
 	ASTNode() ast.Node
+	// FirstPos of a file reports the real first
+	// position within a FileSet, this is different with
+	// Node.Pos(), which only reports Package's pos.
+	// When there is leading comments in the source file,
+	// this method should be used to fetch node's begin pos.
+	FirstPos() token.Pos //
 
 	// IsGoFile ends with .go
 	IsGoFile() bool
@@ -173,6 +180,29 @@ func (c *file) AST() *ast.File {
 // ASTNode implements FileContext
 func (c *file) ASTNode() ast.Node {
 	return c.ast
+}
+
+func (c *file) FirstPos() token.Pos {
+	node := c.ast
+	begin := node.Pos()
+	docPos := token.NoPos
+	commentPos := token.NoPos
+	if node.Doc != nil && len(node.Doc.List) > 0 {
+		docPos = node.Doc.Pos()
+	}
+	for _, nodeComment := range node.Comments {
+		if nodeComment != nil && len(nodeComment.List) > 0 {
+			commentPos = nodeComment.Pos()
+			break
+		}
+	}
+	if docPos != token.NoPos && begin > docPos {
+		begin = docPos
+	}
+	if commentPos != token.NoPos && begin > commentPos {
+		begin = commentPos
+	}
+	return begin
 }
 
 // EditImports implements FileContext
