@@ -15,6 +15,8 @@ type Global interface {
 	// code of an ast Node
 	FileSet() *token.FileSet
 	Code(n Node) string
+	// NOTE: for ast.File, always use CodeAST() or FileCode() instead of CodeSlice
+	CodeAST(n ast.Node) string
 	CodeSlice(begin token.Pos, end token.Pos) string
 
 	FileCode(absPath string) string
@@ -115,7 +117,15 @@ func (c *global) FileSet() *token.FileSet {
 }
 
 func (c *global) Code(n Node) string {
-	return c.CodeSlice(n.ASTNode().Pos(), n.ASTNode().End())
+	return c.CodeAST(n.ASTNode())
+}
+func (c *global) CodeAST(n ast.Node) string {
+	if f, ok := n.(*ast.File); ok {
+		// special treat of file, always take full code
+		f := c.fset.File(f.Pos())
+		return c.FileCode(f.Name())
+	}
+	return c.CodeSlice(n.Pos(), n.End())
 }
 func (c *global) CodeSlice(begin token.Pos, end token.Pos) string {
 	f := c.fset.File(begin)
