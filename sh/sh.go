@@ -25,6 +25,7 @@ type RunBashOptions struct {
 
 	// if StdoutToJSON != nil, the value is parsed into this struct
 	StdoutToJSON interface{}
+	FilterCmd    func(cmd *exec.Cmd)
 }
 
 func RunBashWithOpts(cmdList []string, opts RunBashOptions) (stdout string, stderr string, err error) {
@@ -37,11 +38,14 @@ func RunBashWithOpts(cmdList []string, opts RunBashOptions) (stdout string, stde
 	stderrBuf := bytes.NewBuffer(nil)
 	cmd.Stdout = stdoutBuf
 	cmd.Stderr = stderrBuf
+	if opts.FilterCmd != nil {
+		opts.FilterCmd(cmd)
+	}
 	err = cmd.Run()
 	if err != nil {
 		cmdDetail := ""
 		if !opts.ErrExcludeCmd {
-			cmdDetail = fmt.Sprintf("cmd %s ",cmdExpr)
+			cmdDetail = fmt.Sprintf("cmd %s ", cmdExpr)
 		}
 		err = fmt.Errorf("running cmd error: %s%v stdout:%s stderr:%s", cmdDetail, err, stdoutBuf.String(), stderrBuf.String())
 		return
