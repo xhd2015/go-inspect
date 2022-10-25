@@ -139,16 +139,18 @@ func (c *pkg) ASTNode() ast.Node {
 
 // Dir implements Pkg
 func (c *pkg) Dir() string {
-	modPath, modDir := c.mod.Path(), c.mod.Dir()
+	// if replaced, will have a different mod path
+	origModPath := c.mod.OrigPath()
+	modDir := c.mod.Dir()
 
 	pkgPath := c.Path()
-	if modPath == pkgPath {
+	if origModPath == pkgPath {
 		return modDir
 	}
-	if strings.HasPrefix(pkgPath, modPath) {
-		return path.Join(modDir, pkgPath[len(modPath):])
+	if strings.HasPrefix(pkgPath, origModPath) {
+		return path.Join(modDir, pkgPath[len(origModPath):])
 	}
-	panic(fmt.Errorf("%s not child of %s", pkgPath, modPath))
+	panic(fmt.Errorf("%s not child of %s", pkgPath, origModPath))
 }
 
 // Global implements Pkg
