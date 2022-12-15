@@ -129,7 +129,7 @@ func FindCallGraph(g inspect.Global, mainPkgs []*packages.Package) (*StaticAnaly
 func BuildCallGraphFromSSAResult(g inspect.Global, ssaRes *pointer.Result) *StaticAnalyseResult {
 	return &StaticAnalyseResult{
 		Callgraph: buildCallGraph(g, ssaRes.CallGraph),
-		Warnings:  buildWarnings(g, ssaRes.Warnings),
+		// Warnings:  buildWarnings(g, ssaRes.Warnings), // don't build warnings because we know there are much of them due to delete of AST fles
 	}
 }
 
