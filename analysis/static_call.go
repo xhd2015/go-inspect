@@ -90,12 +90,26 @@ func LoadCallGraph(args []string, opts *load.LoadOptions) (g inspect.Global, res
 		loadPkgs = append(loadPkgs, p.GoPkg())
 	}
 
+	// only load packages of the same project
+	mod0 := g.LoadInfo().MainModule()
+	g.RangePkg(func(pkg inspect.Pkg) bool {
+		if pkg.Module() != mod0 {
+			p := pkg.GoPkg()
+			// unset these two fields tells
+			// pointer analyse to skip them,
+			// which saves lots of memory and
+			// time to wait.
+			p.Syntax = nil
+			p.TypesInfo = nil
+		}
+		return true
+	})
 	res, err = FindCallGraph(g, loadPkgs)
 	return
 }
 
-func FindCallGraph(g inspect.Global, loadPkgs []*packages.Package) (*StaticAnalyseResult, error) {
-	prog, ssaPkgs := ssautil.AllPackages(loadPkgs, 0)
+func FindCallGraph(g inspect.Global, mainPkgs []*packages.Package) (*StaticAnalyseResult, error) {
+	prog, ssaPkgs := ssautil.AllPackages(mainPkgs, 0)
 	// NOTE: Build() must be called to get full relationship
 	// otherwise only main pkg will appear
 	prog.Build()
