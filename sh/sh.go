@@ -84,7 +84,7 @@ func Quote(s string) string {
 	if s == "" {
 		return "''"
 	}
-	if strings.ContainsAny(s, "\t \n;<>\\${}()&!") { // special args
+	if strings.ContainsAny(s, "\t \n;<>\\${}()&!*") { // special args
 		s = strings.ReplaceAll(s, "'", "'\\''")
 		return "'" + s + "'"
 	}
