@@ -30,7 +30,7 @@ type RewriteOpts struct {
 
 	Init           func(proj Project)
 	GenOverlay     func(proj Project, session inspect.Session)
-	RewritePackage func(proj Project, pkg inspect.Pkg, session inspect.Session) bool
+	RewritePackage func(proj Project, pkg inspect.Pkg, session inspect.Session)
 	RewriteFile    func(proj Project, f inspect.FileContext, session inspect.Session)
 }
 
