@@ -1,4 +1,4 @@
-package inspect
+package util
 
 import (
 	"fmt"
