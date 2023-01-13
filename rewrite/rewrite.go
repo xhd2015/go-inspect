@@ -15,7 +15,6 @@ import (
 	"github.com/xhd2015/go-inspect/inspect"
 	"github.com/xhd2015/go-inspect/inspect/load"
 	"github.com/xhd2015/go-inspect/inspect/util"
-	inspect_old "github.com/xhd2015/go-inspect/inspect_old"
 	"github.com/xhd2015/go-inspect/sh"
 )
 
@@ -461,7 +460,7 @@ func makeGomodReplaceAboslute(pkgs func(func(pkg inspect.Pkg, flag PkgFlag) bool
 		if rebaseDir != "" {
 			dir = path.Join(rebaseDir, dir)
 		}
-		gomod, err := inspect_old.GetGoMod(dir)
+		gomod, err := util.GetGoMod(dir)
 		if err != nil {
 			panic(err)
 		}
