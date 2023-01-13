@@ -28,9 +28,10 @@ type RewriteOpts struct {
 	// predefined code sets for generated content
 	PreCode map[string]string
 
-	Init        func(proj Project)
-	GenOverlay  func(proj Project, session inspect.Session)
-	RewriteFile func(proj Project, f inspect.FileContext, session inspect.Session)
+	Init           func(proj Project)
+	GenOverlay     func(proj Project, session inspect.Session)
+	RewritePackage func(proj Project, pkg inspect.Pkg, session inspect.Session) bool
+	RewriteFile    func(proj Project, f inspect.FileContext, session inspect.Session)
 }
 
 // Rewrite always rewrite same module, though it can be
@@ -142,6 +143,13 @@ func Rewrite(loadArgs []string, opts *RewriteOpts) {
 	}
 	vis := &inspect.Visitors{
 		VisitFn: func(n ast.Node, session inspect.Session) bool {
+			if opts.RewritePackage != nil {
+				if pkg, ok := n.(*ast.Package); ok {
+					p := session.Global().Registry().Pkg(pkg)
+					opts.RewritePackage(proj, p, session)
+					return false
+				}
+			}
 			if opts.RewriteFile != nil {
 				if file, ok := n.(*ast.File); ok {
 					f := session.Global().Registry().File(file)
