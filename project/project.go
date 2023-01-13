@@ -14,8 +14,17 @@ import (
 type Project interface {
 	Global() inspect.Global
 	MainPkg() inspect.Pkg
+	// AllocExtraPkg under main
 	AllocExtraPkg(name string) (pkgName string)
+
+	// AllocExtraFile under main
+	AllocExtraFile(name string, suffix string) (fileName string)
+
+	// file creation
 	NewFile(filePath string, content string)
+	ModifyFile(filePath string, content string)
+	ReplaceFile(filePath string, content string)
+	DeriveFileFrom(filePath string, srcPath string, content string)
 
 	RewriteRoot() string
 	RewriteProjectRoot() string
@@ -33,6 +42,7 @@ type project struct {
 	mainPkg            inspect.Pkg
 	rewriteRoot        string
 	rewriteProjectRoot string
+	projectRoot        string
 	genMap             map[string]*rewrite.Content
 }
 
@@ -63,10 +73,39 @@ func (c *project) NewFile(filePath string, content string) {
 	}
 }
 
+// ModifyFile implements Session
+func (c *project) ModifyFile(filePath string, content string) {
+	c.genMap[rewrite.CleanGoFsPath(path.Join(c.rewriteRoot, filePath))] = &rewrite.Content{
+		SrcFile: path.Join(c.projectRoot, filePath),
+		Content: []byte(content),
+	}
+}
+
+// ModifyFile implements Session
+func (c *project) ReplaceFile(filePath string, content string) {
+	c.genMap[rewrite.CleanGoFsPath(path.Join(c.projectRoot, filePath))] = &rewrite.Content{
+		Content: []byte(content),
+	}
+}
+
+// NewFileAsFrom implements Session
+func (c *project) DeriveFileFrom(filePath string, srcPath string, content string) {
+	c.genMap[rewrite.CleanGoFsPath(path.Join(c.rewriteRoot, filePath))] = &rewrite.Content{
+		SrcFile: path.Join(c.projectRoot, srcPath),
+		Content: []byte(content),
+	}
+}
+
 // AllocExtraPkg implements Helper
 func (c *project) AllocExtraPkg(name string) (pkgName string) {
-	return util.NextFileNameUnderDir(c.mainPkg.Dir(), name, "")
+	return path.Join(c.mainPkg.Dir(),util.NextFileNameUnderDir(c.mainPkg.Dir(), name, ""))
 }
+
+// AllocExtraPkg implements Helper
+func (c *project) AllocExtraFile(name string, suffix string) (fileName string) {
+	return path.Join(c.mainPkg.Dir(),util.NextFileNameUnderDir(c.mainPkg.Dir(), name, suffix))
+}
+
 func (c *project) HasImportPkg(f *ast.File, pkgNameQuoted string) bool {
 	return HasImportPkg(f, pkgNameQuoted)
 }

@@ -228,7 +228,7 @@ func extractSingleMod(starterPkgs []*packages.Package) *packages.Module {
 			continue
 		}
 		// check consistence
-		if resMod != mod {
+		if resMod != mod && resMod.Path != mod.Path {
 			panic(fmt.Errorf("package %s has different module %v, want a single module:%v", p.PkgPath, mod, resMod))
 		}
 	}

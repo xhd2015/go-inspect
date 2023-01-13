@@ -18,6 +18,7 @@ type BuildOpts struct {
 	Output     string
 	ForTest    bool
 	GoFlags    []string // passed to go build
+	BuildFlags []string
 }
 
 type RewriteOpts struct {
@@ -34,9 +35,12 @@ type RewriteOpts struct {
 	RewriteFile    func(proj Project, f inspect.FileContext, session inspect.Session)
 }
 
+type RewriteResult struct {
+	*rewrite.BuildResult
+}
 // Rewrite always rewrite same module, though it can be
 // extended to rewrite other modules
-func Rewrite(loadArgs []string, opts *RewriteOpts) {
+func Rewrite(loadArgs []string, opts *RewriteOpts) *RewriteResult{
 	if opts == nil {
 		opts = &RewriteOpts{}
 	}
@@ -53,8 +57,7 @@ func Rewrite(loadArgs []string, opts *RewriteOpts) {
 
 	projectAbsDir, err := util.ToAbsPath(buildOpts.ProjectDir)
 	if err != nil {
-		err = fmt.Errorf("get abs dir err:%v", err)
-		return
+		panic(fmt.Errorf("get abs dir err:%v", err))
 	}
 	projectRewriteRoot := path.Join(rewriteRoot, projectAbsDir)
 
@@ -83,6 +86,7 @@ func Rewrite(loadArgs []string, opts *RewriteOpts) {
 			mainPkg:            mainPkg0,
 			rewriteRoot:        rewriteRoot,
 			rewriteProjectRoot: projectRewriteRoot,
+			projectRoot:        projectAbsDir,
 			genMap:             genMap,
 		}
 		opts.Init(proj)
@@ -173,10 +177,14 @@ func Rewrite(loadArgs []string, opts *RewriteOpts) {
 
 		ForTest: buildOpts.ForTest,
 		GoFlags: buildOpts.GoFlags,
+		BuildFlags: buildOpts.BuildFlags,
 	})
 	if err != nil {
 		panic(err)
 	}
 
 	fmt.Printf("build %s successful.\n", res.Output)
+	return &RewriteResult{
+		BuildResult:res,
+	}
 }

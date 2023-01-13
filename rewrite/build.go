@@ -46,8 +46,9 @@ type BuildRewriteOptions struct {
 	Force bool // force indicates no cache
 
 	// for load & build
-	ForTest bool
-	GoFlags []string // passed to load packages,go build
+	ForTest    bool
+	GoFlags    []string // passed to load packages,go build
+	BuildFlags []string // flags only passed to go build, not loading
 
 	// for build
 	Debug  bool
@@ -67,6 +68,9 @@ func buildRewrite(args []string, ctrl Controller, rewritter inspect.Visitor, opt
 	if err != nil {
 		panic(err)
 	}
+	var flags []string
+	flags = append(flags, opts.GoFlags...)
+	flags = append(flags, opts.BuildFlags...)
 	buildOpts := &BuildOptions{
 		Verbose:     opts.Verbose,
 		ProjectRoot: opts.ProjectDir,
@@ -76,7 +80,7 @@ func buildRewrite(args []string, ctrl Controller, rewritter inspect.Visitor, opt
 		Debug:       opts.Debug,
 		Output:      opts.Output,
 		ForTest:     opts.ForTest,
-		GoFlags:     opts.GoFlags,
+		GoFlags:     flags,
 	}
 	return build(args, buildOpts)
 }
