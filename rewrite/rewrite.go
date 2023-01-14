@@ -19,6 +19,8 @@ import (
 )
 
 type Controller interface {
+	BeforeLoad(opts *BuildRewriteOptions)
+	AfterLoad(g inspect.Global)
 	// FilterPkgs, defaults to starter packages
 	FilterPkgs(g inspect.Global) func(func(p inspect.Pkg, pkgFlag PkgFlag) bool)
 	BeforeCopy(g inspect.Global, session inspect.Session)
@@ -29,6 +31,8 @@ type Controller interface {
 }
 
 type ControllerFuncs struct {
+	BeforeLoadFn func(opts *BuildRewriteOptions)
+	AfterLoadFn  func(g inspect.Global)
 	FilterPkgsFn func(g inspect.Global) func(func(p inspect.Pkg, pkgFlag PkgFlag) bool)
 	BeforeCopyFn func(g inspect.Global, session inspect.Session)
 	GenOverlayFn func(g inspect.Global, session inspect.Session) map[string]*Content
@@ -55,6 +59,20 @@ func (c PkgFlag) IsStarter() bool {
 }
 func (c PkgFlag) IsStarterMod() bool {
 	return c&BitStarterMod == 1
+}
+
+func (c *ControllerFuncs) BeforeLoad(opts *BuildRewriteOptions) {
+	if c.BeforeLoadFn == nil {
+		return
+	}
+	c.BeforeLoadFn(opts)
+}
+
+func (c *ControllerFuncs) AfterLoad(g inspect.Global) {
+	if c.AfterLoadFn == nil {
+		return
+	}
+	c.AfterLoadFn(g)
 }
 
 func (c *ControllerFuncs) FilterPkgs(g inspect.Global) func(func(p inspect.Pkg, pkgFlag PkgFlag) bool) {
@@ -109,12 +127,11 @@ func GenRewrite(args []string, rootDir string, ctrl Controller, rewritter inspec
 	verboseCopy := opts.VerboseCopy
 	verboseRewrite := opts.VerboseRewrite
 	verboseCost := false
-	force := opts.Force
 
 	if rootDir == "" {
 		panic(fmt.Errorf("rootDir is empty"))
 	}
-	if verbose {
+	if opts.Verbose {
 		log.Printf("rewrite root: %s", rootDir)
 	}
 	err = os.MkdirAll(rootDir, 0777)
@@ -129,6 +146,7 @@ func GenRewrite(args []string, rootDir string, ctrl Controller, rewritter inspec
 		err = fmt.Errorf("get abs dir err:%v", err)
 		return
 	}
+	ctrl.BeforeLoad(opts)
 
 	loadPkgTime := time.Now()
 
@@ -141,6 +159,7 @@ func GenRewrite(args []string, rootDir string, ctrl Controller, rewritter inspec
 		err = fmt.Errorf("loading packages err: %v", err)
 		return
 	}
+	ctrl.AfterLoad(g)
 
 	loadPkgEnd := time.Now()
 	if verboseCost {
@@ -238,7 +257,7 @@ func GenRewrite(args []string, rootDir string, ctrl Controller, rewritter inspec
 			log.Printf("copying packages files into rewrite dir: total packages=%d", pkgCnt)
 		}
 		copyTime := time.Now()
-		destUpdatedBySource = copyPackageFiles(pkgsFn, rootDir, extraPkgInVendor, hasStd, force, verboseCopy, verbose)
+		destUpdatedBySource = copyPackageFiles(pkgsFn, rootDir, extraPkgInVendor, hasStd, opts.Force, verboseCopy, verbose)
 		copyEnd := time.Now()
 		if verboseCost {
 			log.Printf("COST copy:%v", copyEnd.Sub(copyTime))
@@ -304,7 +323,7 @@ func GenRewrite(args []string, rootDir string, ctrl Controller, rewritter inspec
 			return !modTime.IsZero() && modTime.After(destFileInfo.ModTime())
 		},
 		filecopy.SyncRebaseOptions{
-			Force:   force,
+			Force:   opts.Force,
 			Ignores: ignores,
 			// ProcessDestPath: cleanFsGoPath, // not needed as we already did that
 			OnUpdateStats: filecopy.NewLogger(func(format string, args ...interface{}) {

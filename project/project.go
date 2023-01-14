@@ -17,7 +17,7 @@ type Project interface {
 
 	// Options return the options to be
 	// used, guranteed to be not nil
-	Options() *RewriteOpts
+	Options() Options
 	Args() []string
 
 	// AllocExtraPkg under main
@@ -47,7 +47,7 @@ var _ Project = ((*project)(nil))
 type project struct {
 	g                  inspect.Global
 	mainPkg            inspect.Pkg
-	opts               *RewriteOpts
+	opts               *options
 	args               []string
 	projectRoot        string
 	rewriteRoot        string
@@ -56,7 +56,7 @@ type project struct {
 }
 
 // Options implements Project
-func (c *project) Options() *RewriteOpts {
+func (c *project) Options() Options {
 	return c.opts
 }
 func (c *project) Args() []string {

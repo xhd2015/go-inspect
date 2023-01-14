@@ -3,7 +3,8 @@ package project
 import "github.com/xhd2015/go-inspect/inspect"
 
 var projectListeners []func(proj Project) Rewriter
-var initListeners []func(proj Project)
+var beforeLoadListeners []func(proj Project)
+var afterLoadListeners []func(proj Project)
 var genOverlayListeners []func(proj Project, session inspect.Session)
 var rewritePackageListeners []func(proj Project, pkg inspect.Pkg, session inspect.Session)
 var rewriteFileListeners []func(proj Project, f inspect.FileContext, session inspect.Session)
@@ -16,9 +17,12 @@ func OnProjectRewrite(fn func(proj Project) Rewriter) {
 	projectListeners = append(projectListeners, fn)
 }
 
-// OnInit called for all projects
-func OnInit(fn func(proj Project)) {
-	initListeners = append(initListeners, fn)
+// BeforeLoad called for all projects
+func BeforeLoad(fn func(proj Project)) {
+	beforeLoadListeners = append(beforeLoadListeners, fn)
+}
+func AfterLoad(fn func(proj Project)) {
+	afterLoadListeners = append(afterLoadListeners, fn)
 }
 
 // OnOverlay called for all projects

@@ -38,18 +38,26 @@ func Rewrite(loadArgs []string, opts *RewriteOpts) *RewriteResult {
 	return doRewrite(loadArgs, &RewriteCallbackOpts{
 		RewriteOpts: opts,
 		RewriteCallback: &RewriteCallback{
-			Init: func(proj Project) {
+			BeforeLoad: func(proj Project) {
 				for _, f := range projectListeners {
 					callback := f(proj)
 					if callback != nil {
 						extraCallbacks = append(extraCallbacks, callback)
 					}
 				}
-				for _, f := range initListeners {
+				for _, f := range beforeLoadListeners {
 					f(proj)
 				}
 				for _, callback := range extraCallbacks {
-					callback.Init(proj)
+					callback.BeforeLoad(proj)
+				}
+			},
+			AfterLoad: func(proj Project) {
+				for _, f := range afterLoadListeners {
+					f(proj)
+				}
+				for _, callback := range extraCallbacks {
+					callback.AfterLoad(proj)
 				}
 			},
 			GenOverlay: func(proj Project, session inspect.Session) {
@@ -149,49 +157,38 @@ func doRewriteNoCheckPanic(loadArgs []string, opts *RewriteCallbackOpts) (proj *
 		panic(fmt.Errorf("get abs dir err:%v", err))
 	}
 	projectRewriteRoot := path.Join(rewriteRoot, projectAbsDir)
-
 	genMap := make(map[string]*rewrite.Content)
 
-	var mainPkg0 inspect.Pkg
-
-	getMainPkg0 := func(g inspect.Global) inspect.Pkg {
-		pkgs := g.LoadInfo().StarterPkgs()
-		if len(pkgs) == 0 {
-			panic(fmt.Errorf("no packages"))
-		}
-		return pkgs[0]
-	}
-
-	initPkgAnalyse := func(g inspect.Global) {
-		if opts.Init == nil {
-			return
-		}
-
-		// ensure mainPkg0
-		mainPkg0 = getMainPkg0(g)
-		proj = &project{
-			g:                  g,
-			mainPkg:            mainPkg0,
-			opts:               opts.RewriteOpts,
-			args:               loadArgs,
-			rewriteRoot:        rewriteRoot,
-			rewriteProjectRoot: projectRewriteRoot,
-			projectRoot:        projectAbsDir,
-			genMap:             genMap,
-		}
-		opts.Init(proj)
-	}
-
-	var init bool
 	ctrl := &rewrite.ControllerFuncs{
+		BeforeLoadFn: func(rwOpts *rewrite.BuildRewriteOptions) {
+			proj = &project{
+				opts: &options{
+					opts:           opts.RewriteOpts,
+					underlyingOpts: rwOpts,
+				},
+				args:               loadArgs,
+				rewriteRoot:        rewriteRoot,
+				rewriteProjectRoot: projectRewriteRoot,
+				projectRoot:        projectAbsDir,
+				genMap:             genMap,
+			}
+			opts.BeforeLoad(proj)
+		},
+		AfterLoadFn: func(g inspect.Global) {
+			proj.g = g
+
+			// find the first package, define that as main
+			// packages
+			pkgs := g.LoadInfo().StarterPkgs()
+			if len(pkgs) == 0 {
+				panic(fmt.Errorf("no packages"))
+			}
+			proj.mainPkg = pkgs[0]
+			opts.AfterLoad(proj)
+		},
 		// TODO: add a explicit init function
 		// called first
 		FilterPkgsFn: func(g inspect.Global) func(func(p inspect.Pkg, pkgFlag rewrite.PkgFlag) bool) {
-			if !init {
-				init = true
-				initPkgAnalyse(g)
-			}
-
 			mod := g.LoadInfo().MainModule()
 			return func(f func(p inspect.Pkg, pkgFlag rewrite.PkgFlag) bool) {
 				g.RangePkg(func(pkg inspect.Pkg) bool {
