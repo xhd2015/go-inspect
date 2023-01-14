@@ -14,6 +14,12 @@ import (
 type Project interface {
 	Global() inspect.Global
 	MainPkg() inspect.Pkg
+
+	// Options return the options to be
+	// used, guranteed to be not nil
+	Options() *RewriteOpts
+	Args() []string
+
 	// AllocExtraPkg under main
 	AllocExtraPkg(name string) (pkgName string)
 
@@ -26,6 +32,7 @@ type Project interface {
 	ReplaceFile(filePath string, content string)
 	DeriveFileFrom(filePath string, srcPath string, content string)
 
+	ProjectRoot() string
 	RewriteRoot() string
 	RewriteProjectRoot() string
 
@@ -40,10 +47,24 @@ var _ Project = ((*project)(nil))
 type project struct {
 	g                  inspect.Global
 	mainPkg            inspect.Pkg
+	opts               *RewriteOpts
+	args               []string
+	projectRoot        string
 	rewriteRoot        string
 	rewriteProjectRoot string
-	projectRoot        string
 	genMap             map[string]*rewrite.Content
+}
+
+// Options implements Project
+func (c *project) Options() *RewriteOpts {
+	return c.opts
+}
+func (c *project) Args() []string {
+	return c.args
+}
+
+func (c *project) ProjectRoot() string {
+	return c.projectRoot
 }
 
 // RewriteRoot implements Project
@@ -98,12 +119,12 @@ func (c *project) DeriveFileFrom(filePath string, srcPath string, content string
 
 // AllocExtraPkg implements Helper
 func (c *project) AllocExtraPkg(name string) (pkgName string) {
-	return path.Join(c.mainPkg.Dir(),util.NextFileNameUnderDir(c.mainPkg.Dir(), name, ""))
+	return path.Join(c.mainPkg.Dir(), util.NextFileNameUnderDir(c.mainPkg.Dir(), name, ""))
 }
 
 // AllocExtraPkg implements Helper
 func (c *project) AllocExtraFile(name string, suffix string) (fileName string) {
-	return path.Join(c.mainPkg.Dir(),util.NextFileNameUnderDir(c.mainPkg.Dir(), name, suffix))
+	return path.Join(c.mainPkg.Dir(), util.NextFileNameUnderDir(c.mainPkg.Dir(), name, suffix))
 }
 
 func (c *project) HasImportPkg(f *ast.File, pkgNameQuoted string) bool {
