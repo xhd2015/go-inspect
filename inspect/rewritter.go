@@ -129,7 +129,7 @@ func (c *stackVisitor) Visit(node ast.Node) (w ast.Visitor) {
 		// back
 		last := c.stack[len(c.stack)-1]
 		c.stack = c.stack[:len(c.stack)-1]
-		c.v.Visit(last, c.session)
+		c.v.VisitEnd(last, c.session)
 		return
 	}
 	if !c.v.Visit(node, c.session) {

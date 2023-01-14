@@ -19,6 +19,8 @@ type rewritter struct {
 	project.Rewriter
 }
 
+var _ project.Rewriter = (*rewritter)(nil)
+
 func NewRewritter() project.Rewriter {
 	return &rewritter{
 		Rewriter: project.NewDefaultRewriter(&project.RewriteCallback{}),
@@ -67,5 +69,3 @@ func init(){
 	gedit := session.PackageEdit(proj.MainPkg(), "0")
 	gedit.MustImport(path.Join(proj.MainPkg().Path(), path.Base(pkgDir)), "export_getg", "_", nil)
 }
-
-var _ project.Rewriter = (*rewritter)(nil)
