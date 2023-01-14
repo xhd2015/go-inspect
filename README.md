@@ -8,8 +8,6 @@ A more sophisticated usage is [https://github.com/xhd2015/go-mock](https://githu
 
 # Usage
 
-> NOTE: still in progress
-
 ## CLI
 
 ```bash
