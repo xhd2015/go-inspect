@@ -5,3 +5,4 @@ debug.bin
 go.mod.tmp
 
 *.tmp.json
+test.bin

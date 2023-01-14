@@ -43,6 +43,10 @@ type BuildRewriteOptions struct {
 	ProjectDir string // the project dir
 	RebaseRoot string
 
+	// RewriteStd should files inside GOROOT/src
+	// be modified?
+	RewriteStd bool
+
 	Force bool // force indicates no cache
 
 	// for load & build

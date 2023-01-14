@@ -148,7 +148,7 @@ func doRewriteNoCheckPanic(loadArgs []string, opts *RewriteCallbackOpts) (proj *
 	buildOpts := opts.RewriteOpts.BuildOpts
 	rewriteName := opts.RewriteName
 	if rewriteName == "" {
-		rewriteName = "code-lens-agent"
+		rewriteName = "go-inspect"
 	}
 	rewriteRoot := rewrite.GetTmpRewriteRoot(rewriteName)
 
@@ -271,7 +271,6 @@ func doRewriteNoCheckPanic(loadArgs []string, opts *RewriteCallbackOpts) (proj *
 		panic(err)
 	}
 
-	fmt.Printf("build %s successful.\n", res.Output)
 	result = &RewriteResult{
 		BuildResult: res,
 	}

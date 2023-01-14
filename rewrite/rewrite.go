@@ -214,7 +214,10 @@ func GenRewrite(args []string, rootDir string, ctrl Controller, rewritter inspec
 
 	// TODO: move vendor detection to Global
 	extraPkgInVendor := false
-	hasStd := false
+
+	// hasStd indicates whether the standard
+	// lib is rewritten, for example: runtime
+	hasStd := opts.RewriteStd
 	hasExtra := false
 
 	pkgCnt := 0
@@ -287,6 +290,13 @@ func GenRewrite(args []string, rootDir string, ctrl Controller, rewritter inspec
 	writeContentTime := time.Now()
 
 	ctrl.BeforeCopy(g, session)
+
+	// NOTE: paths in the backMap
+	// are absolute, i.e. ${REWRITE_ROOT}/${ORIG_DIR}/file.go
+	// so it's possible to put anything in here
+	// the upper layer package 'project' will
+	// ensure these files are all rooted at ${REWRITE_ROOT},
+	// including GOROOT/src rewritted ones.
 	backMap := ctrl.GenOverlay(g, session)
 
 	// in this copy config, srcPath is the same with destPath
@@ -380,6 +390,7 @@ func copyPackageFiles(pkgs func(func(p inspect.Pkg, flag PkgFlag) bool), rootDir
 	}
 	if hasStd {
 		// TODO: what if GOROOT is /usr/local/bin?
+		// it also has /usr/local/go/src
 		dirList = append(dirList, util.GetGOROOT())
 	}
 	// copy other pkgs (deprecated, this only copies package files, but we need to module if any package is modfied.may be used in the future when overlay is supported)

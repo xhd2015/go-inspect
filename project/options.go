@@ -28,6 +28,9 @@ type Options interface {
 
 	Verbose() bool
 
+	RewriteStd() bool
+	SetRewriteStd(rewriteStd bool)
+
 	// GoFlags are common to load and build
 	GoFlags() []string
 
@@ -38,6 +41,16 @@ type Options interface {
 type options struct {
 	opts           *RewriteOpts
 	underlyingOpts *rewrite.BuildRewriteOptions
+}
+
+// RewriteStd implements Options
+func (c *options) RewriteStd() bool {
+	return c.underlyingOpts.RewriteStd
+}
+
+// SetRewriteStd implements Options
+func (c *options) SetRewriteStd(rewriteStd bool) {
+	c.underlyingOpts.RewriteStd = rewriteStd
 }
 
 // Force implements Options

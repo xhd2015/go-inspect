@@ -1,4 +1,4 @@
-# export_g
+# getg
 
 Export the `runtime.getg()` which is unexported by default.
 

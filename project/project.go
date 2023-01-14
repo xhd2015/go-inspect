@@ -26,6 +26,10 @@ type Project interface {
 	// AllocExtraFile under main
 	AllocExtraFile(name string, suffix string) (fileName string)
 
+	// AllocExtraFile under main
+	AllocExtraPkgAt(dir string, name string, suffix string) (fileName string)
+	AllocExtraFileaAt(dir string, name string, suffix string) (fileName string)
+
 	// file creation
 	NewFile(filePath string, content string)
 	ModifyFile(filePath string, content string)
@@ -53,6 +57,16 @@ type project struct {
 	rewriteRoot        string
 	rewriteProjectRoot string
 	genMap             map[string]*rewrite.Content
+}
+
+// AllocExtraFileaAt implements Project
+func (c *project) AllocExtraFileaAt(dir string, name string, suffix string) (fileName string) {
+	return path.Join(dir, util.NextFileNameUnderDir(dir, name, ""))
+}
+
+// AllocExtraPkgAt implements Project
+func (c *project) AllocExtraPkgAt(dir string, name string, suffix string) (fileName string) {
+	return path.Join(dir, util.NextFileNameUnderDir(dir, name, suffix))
 }
 
 // Options implements Project

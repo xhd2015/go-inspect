@@ -1,0 +1,6 @@
+# github.com/gopherjs/gopherjs v1.17.2
+## explicit
+github.com/gopherjs/gopherjs/js
+# github.com/jtolds/gls v4.20.0+incompatible
+## explicit
+github.com/jtolds/gls
