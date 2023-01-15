@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"reflect"
 	"sync"
+	"unsafe"
 
 	"golang.org/x/tools/go/packages"
 
@@ -49,6 +51,10 @@ type LoadInfo interface {
 	FileSet() *token.FileSet
 	MainModule() Module
 
+	// StarterPkgs returns the pkgs
+	// specified by args,
+	// if test packages are loaded,
+	// they are filtered for this list
 	StarterPkgs() []Pkg
 
 	// RangePkgs visit all pkgs
@@ -76,9 +82,23 @@ func NewGlobal(fset *token.FileSet, root string, pkgs []*packages.Package) Globa
 	}
 	modMap := make(map[string]Module)
 	pkgMap := make(map[string]Pkg)
+	testPkgMap := make(map[string]*packages.Package)
 
 	regBuilder := NewRegistryBuilder()
 	packages.Visit(pkgs, func(pkg *packages.Package) bool {
+		forTest := getForTest(pkg)
+		// test package
+		// if strings.HasSuffix(pkg.ID, ".test") && pkg.ID[:len(pkg.ID)-len(".test")] == pkg.PkgPath {
+		if forTest != "" {
+			testPkgMap[pkg.PkgPath] = pkg
+			return true
+		}
+		if pkg.Module == nil {
+			// this could be caused by loadSyntax only
+			// only builtin pkg allow no module
+			panic(fmt.Errorf("non-test pkg %s has no module", pkg.PkgPath))
+		}
+
 		mod := pkg.Module
 		m := modMap[mod.Path]
 		if m == nil {
@@ -91,8 +111,24 @@ func NewGlobal(fset *token.FileSet, root string, pkgs []*packages.Package) Globa
 		return true
 	}, nil)
 
+	// associate test package
+	for pkgPath, p := range pkgMap {
+		t := testPkgMap[pkgPath]
+		if t != nil {
+			p := p.(*pkg)
+			t := NewPkg(p.mod, t)
+			p.testPkg = t.(*pkg)
+			regBuilder.addPkg(t)
+		}
+	}
+
+	// filter out start pkgs
 	starterPkgs := make([]Pkg, 0, len(pkgs))
 	for _, pkg := range pkgs {
+		forTest := getForTest(pkg)
+		if forTest != "" {
+			continue
+		}
 		starterPkgs = append(starterPkgs, pkgMap[pkg.PkgPath])
 	}
 	// main
@@ -109,6 +145,36 @@ func NewGlobal(fset *token.FileSet, root string, pkgs []*packages.Package) Globa
 	}
 	g.registry = regBuilder.build()
 	return g
+}
+
+func getForTest(goPkg *packages.Package) string {
+	goPkgVal := reflect.ValueOf(goPkg).Elem() // ptr -> struct
+	f := getUnexportedField(tryGetField(goPkgVal, "forTest"))
+	if f == nil {
+		return ""
+	}
+	s, _ := f.(string)
+	return s
+}
+func tryGetField(val reflect.Value, name string) reflect.Value {
+	defer func() {
+		if e := recover(); e != nil {
+			// ignore
+		}
+	}()
+	return val.FieldByName(name)
+}
+func getUnexportedField(field reflect.Value) interface{} {
+	if !field.IsValid() {
+		return nil
+	}
+	return reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem().Interface()
+}
+
+func setUnexportedField(field reflect.Value, value interface{}) {
+	reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).
+		Elem().
+		Set(reflect.ValueOf(value))
 }
 
 // FileSet implements Global

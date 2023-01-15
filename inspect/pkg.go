@@ -38,6 +38,11 @@ type Pkg interface {
 	GoPkg() *packages.Package
 	TypePkg() *types.Package
 
+	// TestPkg returns the {PkgPath}.test
+	// parts for this pkg, if any
+	TestPkg() Pkg
+
+	// deprecated
 	IsTest() bool
 
 	RangeFiles(fn func(i int, f FileContext) bool)
@@ -102,6 +107,8 @@ type pkg struct {
 	ast   *ast.Package
 	goPkg *packages.Package
 
+	testPkg *pkg
+
 	files []FileContext
 }
 
@@ -125,6 +132,15 @@ func NewPkg(mod Module, goPkg *packages.Package) Pkg {
 	p.files = files
 	p.ast.Files = astFiles
 	return p
+}
+
+// TestPkg implements Pkg
+func (c *pkg) TestPkg() Pkg {
+	if c.testPkg==nil{
+		return nil
+	}
+	return c.testPkg
+	// return c.testPkg
 }
 
 // AST implements Pkg

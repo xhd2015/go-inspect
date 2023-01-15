@@ -27,13 +27,20 @@ type Project interface {
 	AllocExtraFile(name string, suffix string) (fileName string)
 
 	// AllocExtraFile under main
-	AllocExtraPkgAt(dir string, name string, suffix string) (fileName string)
+	AllocExtraPkgAt(dir string, name string) (fileName string)
 	AllocExtraFileaAt(dir string, name string, suffix string) (fileName string)
 
 	// file creation
+	// NewFile create a file in rewritten root
+	// without tracking any file
 	NewFile(filePath string, content string)
+	// ModifyFile modifes a file in rewritten root
+	// with tracking
 	ModifyFile(filePath string, content string)
+	// ReplaceFile modifies the original source
 	ReplaceFile(filePath string, content string)
+
+	// DeriveFileFrom create a file with tracking
 	DeriveFileFrom(filePath string, srcPath string, content string)
 
 	ProjectRoot() string
@@ -61,12 +68,12 @@ type project struct {
 
 // AllocExtraFileaAt implements Project
 func (c *project) AllocExtraFileaAt(dir string, name string, suffix string) (fileName string) {
-	return path.Join(dir, util.NextFileNameUnderDir(dir, name, ""))
+	return path.Join(dir, util.NextFileNameUnderDir(dir, name, suffix))
 }
 
 // AllocExtraPkgAt implements Project
-func (c *project) AllocExtraPkgAt(dir string, name string, suffix string) (fileName string) {
-	return path.Join(dir, util.NextFileNameUnderDir(dir, name, suffix))
+func (c *project) AllocExtraPkgAt(dir string, name string) (fileName string) {
+	return path.Join(dir, util.NextFileNameUnderDir(dir, name, ""))
 }
 
 // Options implements Project

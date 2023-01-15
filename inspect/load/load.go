@@ -17,6 +17,7 @@ type LoadOptions struct {
 	ProjectDir string
 	ForTest    bool
 	BuildFlags []string // see FlagBuilder
+	LoadMode   []packages.LoadMode
 }
 
 func LoadPackages(args []string, opts *LoadOptions) (inspect.Global, error) {
@@ -29,9 +30,20 @@ func LoadPackages(args []string, opts *LoadOptions) (inspect.Global, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	var loadMode packages.LoadMode
+	if len(opts.LoadMode) > 0 {
+		for _, m := range opts.LoadMode {
+			loadMode |= m
+		}
+	} else {
+		// all
+		loadMode = packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles | packages.NeedTypesSizes | packages.NeedSyntax | packages.NeedDeps | packages.NeedImports | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedModule
+	}
+
 	cfg := &packages.Config{
 		Dir:        absDir,
-		Mode:       packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles | packages.NeedTypesSizes | packages.NeedSyntax | packages.NeedDeps | packages.NeedImports | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedModule,
+		Mode:       loadMode,
 		Fset:       fset,
 		Tests:      opts.ForTest,
 		BuildFlags: opts.BuildFlags,

@@ -75,6 +75,8 @@ type GoRewriteEdit interface {
 
 	// can always work
 	AddAnaymouseInit(code string)
+
+	Append(code string)
 }
 
 type GoNewEdit interface {
@@ -272,6 +274,10 @@ func NewGoRewrite(f FileContext) GoRewriteEdit {
 func (c *goRewriteEdit) AddAnaymouseInit(code string) {
 	c.Edit.Insert(c.anonymousPos.Pos(), code)
 	c.anonymousPos.Advance(len(code))
+}
+func (c *goRewriteEdit) Append(code string) {
+	c.Edit.Insert(c.anonymousPos.pos, code)
+	// c.anonymousPos.Advance(len(code))
 }
 
 type imp struct {

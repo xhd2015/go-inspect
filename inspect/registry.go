@@ -7,6 +7,8 @@ import (
 	"sync"
 )
 
+// Registry holds ast mapping in a load info
+//
 // This is a pattern we used, we call it
 //
 // Each AST node is globally unique within its load,
