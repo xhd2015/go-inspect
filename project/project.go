@@ -51,6 +51,10 @@ type Project interface {
 	HasImportPkg(f *ast.File, pkgNameQuoted string) bool
 	ShortHash(s string) string
 	ShortHashFile(f inspect.FileContext) string
+
+	// SetData makes project serve as a context
+	SetData(key interface{}, value interface{})
+	GetData(key interface{}) (value interface{}, ok bool)
 }
 
 var _ Project = ((*project)(nil))
@@ -64,6 +68,8 @@ type project struct {
 	rewriteRoot        string
 	rewriteProjectRoot string
 	genMap             map[string]*rewrite.Content
+
+	ctxData map[interface{}]interface{}
 }
 
 // AllocExtraFileaAt implements Project
@@ -158,6 +164,17 @@ func (c *project) ShortHash(s string) string {
 // ShortHashFile implements Session
 func (*project) ShortHashFile(f inspect.FileContext) string {
 	return ShortHashFile(f)
+}
+
+// GetData implements Project
+func (c *project) GetData(key interface{}) (value interface{}, ok bool) {
+	value, ok = c.ctxData[key]
+	return
+}
+
+// SetData implements Project
+func (c *project) SetData(key interface{}, value interface{}) {
+	c.ctxData[key] = value
 }
 
 func ShortHash(s string) string {

@@ -171,6 +171,7 @@ func doRewriteNoCheckPanic(loadArgs []string, opts *RewriteCallbackOpts) (proj *
 				rewriteProjectRoot: projectRewriteRoot,
 				projectRoot:        projectAbsDir,
 				genMap:             genMap,
+				ctxData:            make(map[interface{}]interface{}),
 			}
 			opts.BeforeLoad(proj)
 		},
