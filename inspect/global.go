@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	"go/token"
 	"reflect"
+	"strings"
 	"sync"
 	"unsafe"
 
@@ -96,6 +97,13 @@ func NewGlobal(fset *token.FileSet, root string, pkgs []*packages.Package) Globa
 		if pkg.Module == nil {
 			// this could be caused by loadSyntax only
 			// only builtin pkg allow no module
+			// also, when loading test packages, a package with
+			// Name=main, PkgPath={PkgPath}.test, is a generated pkg
+			// we can skip such generated pkg
+			if pkg.Name == "main" && strings.HasSuffix(pkg.PkgPath, ".test") {
+				// skip such generated test sugar package
+				return true
+			}
 			panic(fmt.Errorf("non-test pkg %s has no module", pkg.PkgPath))
 		}
 
@@ -129,7 +137,12 @@ func NewGlobal(fset *token.FileSet, root string, pkgs []*packages.Package) Globa
 		if forTest != "" {
 			continue
 		}
-		starterPkgs = append(starterPkgs, pkgMap[pkg.PkgPath])
+		// generated test pkg maybe skipped
+		loadedPkg := pkgMap[pkg.PkgPath]
+		if loadedPkg == nil {
+			continue
+		}
+		starterPkgs = append(starterPkgs, loadedPkg)
 	}
 	// main
 	mainGoMod := extractSingleMod(pkgs)
