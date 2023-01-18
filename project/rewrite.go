@@ -17,8 +17,8 @@ type BuildOpts struct {
 	Debug      bool
 	Output     string
 	ForTest    bool
-	GoFlags    []string // passed to go build
-	BuildFlags []string
+	GoFlags    []string // passed to go load
+	BuildFlags []string // passed to go build
 }
 type RewriteOpts struct {
 	BuildOpts *BuildOpts

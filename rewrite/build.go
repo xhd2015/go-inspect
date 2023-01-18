@@ -72,9 +72,6 @@ func buildRewrite(args []string, ctrl Controller, rewritter inspect.Visitor, opt
 	if err != nil {
 		panic(err)
 	}
-	var flags []string
-	flags = append(flags, opts.GoFlags...)
-	flags = append(flags, opts.BuildFlags...)
 	buildOpts := &BuildOptions{
 		Verbose:     opts.Verbose,
 		ProjectRoot: opts.ProjectDir,
@@ -84,7 +81,7 @@ func buildRewrite(args []string, ctrl Controller, rewritter inspect.Visitor, opt
 		Debug:       opts.Debug,
 		Output:      opts.Output,
 		ForTest:     opts.ForTest,
-		GoFlags:     flags,
+		GoFlags:     opts.BuildFlags,
 	}
 	return build(args, buildOpts)
 }
