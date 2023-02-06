@@ -177,7 +177,7 @@ func GenRewrite(args []string, rootDir string, ctrl Controller, rewritter inspec
 	// validate
 	starterPkgs := g.LoadInfo().StarterPkgs()
 	if len(starterPkgs) == 0 {
-		err = fmt.Errorf("no packages loaded.")
+		err = fmt.Errorf("no packages loaded")
 		return
 	}
 
@@ -303,6 +303,16 @@ func GenRewrite(args []string, rootDir string, ctrl Controller, rewritter inspec
 	// ensure these files are all rooted at ${REWRITE_ROOT},
 	// including GOROOT/src rewritted ones.
 	backMap := ctrl.GenOverlay(g, session)
+
+	// DEBUG
+	// for file, content := range backMap {
+	// 	if strings.Contains(file, "dialect.go") {
+	// 		b := content
+	// 		_ = content
+	// 		a := b
+	// 		b = a
+	// 	}
+	// }
 
 	// in this copy config, srcPath is the same with destPath
 	// the extra info is looked up in a back map
@@ -464,30 +474,38 @@ func makeGomodReplaceAboslute(pkgs func(func(pkg inspect.Pkg, flag PkgFlag) bool
 			}
 			return true
 		}
+		// must use original path
+		// some replace have:
+		//   path: x/y/z
+		//   replace.path: ../y/z
+		modPath := mod.OrigPath()
+		modDir := mod.Dir()
 		// extra pkg
 		if flag.IsExtra() {
 			if mod.IsStd() {
 				// std modules are replaced via golabl env: GOROOT=xxx
 				return true
 			}
-			if preMap[mod.Path()] != "" {
+			if preMap[modPath] != "" {
 				return true
 			}
-			cleanDir := cleanGoFsPath(mod.Dir())
+			// dir always absolute
+			cleanDir := cleanGoFsPath(modDir)
 			newPath := path.Join(rebaseDir, cleanDir)
-			preMap[mod.Path()] = newPath
-			preCmdList = append(preCmdList, goModEditReplace(mod.Path(), newPath))
+			preMap[modPath] = newPath
+			preCmdList = append(preCmdList, goModEditReplace(modPath, newPath))
+			replaceMap[modPath] = newPath
 
-			mappedMod[mod.Dir()] = cleanDir
+			mappedMod[modDir] = cleanDir
 			return true
 		}
 
 		// normal pkg
-		if modMap[mod.Path()] {
+		if modMap[modPath] {
 			return true
 		}
 
-		modMap[mod.Path()] = true
+		modMap[modPath] = true
 		mods = append(mods, mod)
 		return true
 	})
@@ -532,7 +550,7 @@ func makeGomodReplaceAboslute(pkgs func(func(pkg inspect.Pkg, flag PkgFlag) bool
 
 		if len(replaceList) > 0 || len(preCmdList) > 0 {
 			if verbose {
-				log.Printf("make absolute replace in go.mod for %v", mod.Path())
+				log.Printf("make absolute replace in go.mod for %v", mod.OrigPath())
 			}
 			cmds := append([]string{
 				fmt.Sprintf("cd %s", sh.Quote(dir)),

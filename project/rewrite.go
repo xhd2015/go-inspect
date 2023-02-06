@@ -25,6 +25,9 @@ type RewriteOpts struct {
 
 	RewriteName string // default: code-lens-agent
 
+	// ShouldRewritePackage an extra filter to include other packages
+	ShouldRewritePackage func(pkg inspect.Pkg) bool
+
 	// predefined code sets for generated content
 	PreCode map[string]string
 }
@@ -197,6 +200,14 @@ func doRewriteNoCheckPanic(loadArgs []string, opts *RewriteCallbackOpts) (proj *
 					if pkg.Module() == mod {
 						f(pkg, rewrite.BitStarterMod)
 					}
+					if opts.ShouldRewritePackage != nil && opts.ShouldRewritePackage(pkg) {
+						f(pkg, rewrite.BitExtra)
+					}
+					// DEBUG
+					// pkgPath := pkg.Path()
+					// if pkgPath == "github.com/xormplus/xorm/dialects" {
+					// 	f(pkg, rewrite.BitExtra)
+					// }
 					return true
 				})
 			}
