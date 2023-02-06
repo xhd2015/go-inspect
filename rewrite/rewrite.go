@@ -2,6 +2,7 @@ package rewrite
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"path"
@@ -277,12 +278,16 @@ func GenRewrite(args []string, rootDir string, ctrl Controller, rewritter inspec
 			log.Printf("replacing go.mod with rewritten paths")
 		}
 		goModTime := time.Now()
-		res.MappedMod = makeGomodReplaceAboslute(pkgsFn, rootDir, verbose)
+		res.MappedMod = makeGomodReplaceAboslute(pkgsFn, rootDir, projectDir, verbose)
 		goModEnd := time.Now()
 		if verboseCost {
 			log.Printf("COST go mod:%v", goModEnd.Sub(goModTime))
 		}
 	}
+
+	// NOTE: only non-vendor needs to replace relative module path
+	// with absolute path, because vendored packages are inside
+	// vendor
 	if !extraPkgInVendor {
 		doMod()
 	}
@@ -436,7 +441,10 @@ func copyPackageFiles(pkgs func(func(p inspect.Pkg, flag PkgFlag) bool), rootDir
 }
 
 // go mod's replace, find relative paths and replace them with absolute path
-func makeGomodReplaceAboslute(pkgs func(func(pkg inspect.Pkg, flag PkgFlag) bool), rebaseDir string, verbose bool) (mappedMod map[string]string) {
+func makeGomodReplaceAboslute(pkgs func(func(pkg inspect.Pkg, flag PkgFlag) bool), rebaseDir string, projectDir string, verbose bool) (mappedMod map[string]string) {
+	// if there is vendor/modules.txt, should also replace there
+	replaceMap := make(map[string]string)
+
 	goModEditReplace := func(oldpath string, newPath string) string {
 		return fmt.Sprintf("go mod edit -replace=%s=%s", sh.Quote(oldpath), sh.Quote(newPath))
 	}
@@ -512,7 +520,13 @@ func makeGomodReplaceAboslute(pkgs func(func(pkg inspect.Pkg, flag PkgFlag) bool
 				if rp.Old.Version != "" {
 					oldv += "@" + rp.Old.Version
 				}
-				replaceList = append(replaceList, goModEditReplace(oldv, path.Join(origDir, rp.New.Path)))
+				newPath := path.Join(origDir, rp.New.Path)
+				replaceList = append(replaceList, goModEditReplace(oldv, newPath))
+
+				// replace vendor/modules.txt without version will effectively replace all version
+				// # PKG => PATH
+				// # PKG VERSION => PATH
+				replaceMap[rp.Old.Path] = newPath
 			}
 		}
 
@@ -530,6 +544,62 @@ func makeGomodReplaceAboslute(pkgs func(func(pkg inspect.Pkg, flag PkgFlag) bool
 			}
 		}
 	}
+
+	// because files are already copied, so we can check vendor/modules.txt locally
+	vendorErr := appendVendorModulesIgnoreNonExist(path.Join(rebaseDir, projectDir, "vendor/modules.txt"), replaceMap)
+	if vendorErr != nil {
+		log.Printf("ERROR failed to update vendor/modules.txt: %v\n", vendorErr)
+		panic(vendorErr)
+	}
+	return
+}
+func appendVendorModulesIgnoreNonExist(path string, replaceMap map[string]string) (err error) {
+	if len(replaceMap) == 0 {
+		return
+	}
+	bytes, err := ioutil.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// if the file does not exist, we can safely ignore updating it
+			err = nil
+		}
+		return
+	}
+
+	// replace lines
+	lines := strings.Split(string(bytes), "\n")
+	for i, line := range lines {
+		if !strings.HasPrefix(line, "# ") {
+			continue
+		}
+		lineTail := line[2:]
+		idx := strings.Index(lineTail, "=>")
+		if idx < 0 {
+			continue
+		}
+		// it could have a version
+		pkgVersion := strings.SplitN(strings.TrimSpace(lineTail[:idx]), " ", 2)
+		var pkg string
+		var version string
+		if len(pkgVersion) > 0 {
+			pkg = pkgVersion[0]
+		}
+		if len(pkgVersion) > 1 {
+			version = pkgVersion[1]
+		}
+		replace := replaceMap[pkg]
+		if replace == "" {
+			continue
+		}
+		newLine := "# " + pkg
+		if version != "" {
+			newLine += " " + version
+		}
+		newLine += " => " + replace
+		lines[i] = newLine
+	}
+
+	err = ioutil.WriteFile(path, []byte(strings.Join(lines, "\n")), 0777)
 	return
 }
 
