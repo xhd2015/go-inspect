@@ -60,6 +60,7 @@ func (c *EditCallbackFn) OnPkg(p Pkg, kind string, realName string, content stri
 
 // Edit represents
 type Edit interface {
+	// Insert insert after the given position
 	Insert(start token.Pos, content string)
 	Delete(start token.Pos, end token.Pos)
 	Replace(start token.Pos, end token.Pos, newContent string)

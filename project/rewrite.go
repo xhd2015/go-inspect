@@ -30,6 +30,8 @@ type RewriteOpts struct {
 
 	// predefined code sets for generated content
 	PreCode map[string]string
+
+	SkipBuild bool
 }
 
 type RewriteResult struct {
@@ -272,8 +274,9 @@ func doRewriteNoCheckPanic(loadArgs []string, opts *RewriteCallbackOpts) (proj *
 		RebaseRoot: rewriteRoot,
 		Force:      buildOpts.Force,
 
-		Debug:  buildOpts.Debug,
-		Output: buildOpts.Output,
+		Debug:     buildOpts.Debug,
+		Output:    buildOpts.Output,
+		SkipBuild: opts.SkipBuild,
 
 		ForTest:    buildOpts.ForTest,
 		GoFlags:    buildOpts.GoFlags,

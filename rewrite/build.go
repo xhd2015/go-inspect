@@ -55,8 +55,9 @@ type BuildRewriteOptions struct {
 	BuildFlags []string // flags only passed to go build, not loading
 
 	// for build
-	Debug  bool
-	Output string
+	Debug     bool
+	Output    string
+	SkipBuild bool
 }
 
 func buildRewrite(args []string, ctrl Controller, rewritter inspect.Visitor, opts *BuildRewriteOptions) (*BuildResult, error) {
@@ -71,6 +72,11 @@ func buildRewrite(args []string, ctrl Controller, rewritter inspect.Visitor, opt
 	res, err := GenRewrite(args, rewriteRoot, ctrl, rewritter, opts)
 	if err != nil {
 		panic(err)
+	}
+	if opts.SkipBuild {
+		return &BuildResult{
+			Output: "skipped",
+		}, nil
 	}
 	buildOpts := &BuildOptions{
 		Verbose:     opts.Verbose,
