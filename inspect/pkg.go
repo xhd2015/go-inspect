@@ -42,6 +42,11 @@ type Pkg interface {
 	// parts for this pkg, if any
 	TestPkg() Pkg
 
+	// the TestedPkg returns the acutal pkg
+	// that this package refers to, it this
+	// package is a test package
+	TestedPkg() Pkg
+
 	// deprecated
 	IsTest() bool
 
@@ -107,7 +112,8 @@ type pkg struct {
 	ast   *ast.Package
 	goPkg *packages.Package
 
-	testPkg *pkg
+	testPkg   *pkg
+	testedPkg *pkg
 
 	files []FileContext
 }
@@ -136,11 +142,22 @@ func NewPkg(mod Module, goPkg *packages.Package) Pkg {
 
 // TestPkg implements Pkg
 func (c *pkg) TestPkg() Pkg {
-	if c.testPkg==nil{
+	// why this fucking if?
+	// because c.testPkg has type *pkg, while
+	// the return type is Pkg,
+	// if return c.testPkg directly,
+	// c.TestPkg()==nil will always be false,
+	// but access to that will cause NPE
+	if c.testPkg == nil {
 		return nil
 	}
 	return c.testPkg
-	// return c.testPkg
+}
+func (c *pkg) TestedPkg() Pkg {
+	if c.testedPkg == nil {
+		return nil
+	}
+	return c.testedPkg
 }
 
 // AST implements Pkg

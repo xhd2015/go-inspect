@@ -83,7 +83,11 @@ func NewGlobal(fset *token.FileSet, root string, pkgs []*packages.Package) Globa
 	}
 	modMap := make(map[string]Module)
 	pkgMap := make(map[string]Pkg)
+
+	// pkgPath -> Pkg itself
 	testPkgMap := make(map[string]*packages.Package)
+	// pkgPath's forTest -> Pkg itself
+	forTestPkgMap := make(map[string]*packages.Package)
 
 	regBuilder := NewRegistryBuilder()
 	packages.Visit(pkgs, func(pkg *packages.Package) bool {
@@ -92,6 +96,7 @@ func NewGlobal(fset *token.FileSet, root string, pkgs []*packages.Package) Globa
 		// if strings.HasSuffix(pkg.ID, ".test") && pkg.ID[:len(pkg.ID)-len(".test")] == pkg.PkgPath {
 		if forTest != "" {
 			testPkgMap[pkg.PkgPath] = pkg
+			forTestPkgMap[forTest] = pkg
 			return true
 		}
 		if pkg.Module == nil {
@@ -119,12 +124,17 @@ func NewGlobal(fset *token.FileSet, root string, pkgs []*packages.Package) Globa
 		return true
 	}, nil)
 
-	// associate test package
+	// associate test package,and tested package
 	for pkgPath, p := range pkgMap {
 		t := testPkgMap[pkgPath]
+		if t == nil {
+			// try {pkgPath}_test
+			t = forTestPkgMap[pkgPath]
+		}
 		if t != nil {
 			p := p.(*pkg)
 			t := NewPkg(p.mod, t)
+			t.(*pkg).testedPkg = p
 			p.testPkg = t.(*pkg)
 			regBuilder.addPkg(t)
 		}
@@ -163,6 +173,15 @@ func NewGlobal(fset *token.FileSet, root string, pkgs []*packages.Package) Globa
 func getForTest(goPkg *packages.Package) string {
 	goPkgVal := reflect.ValueOf(goPkg).Elem() // ptr -> struct
 	f := getUnexportedField(tryGetField(goPkgVal, "forTest"))
+
+	// there may have three possible pkgs:
+	//   1. X, forTest=""
+	//   2. X.test, forTest=""
+	//   3. X, forTest=X   or X_test, forTest=X, the X_test case appears when a package name ends with _test, which means if a/b/c has name X_test, then the package path appears to be a/b/c_test
+	// that is, in most cases X's test pkg has path X, and forTest=X,
+	// but in some case it may(maybe an edge case) the test package has an extra suffix _test
+	// pkgPath := goPkg.PkgPath
+
 	if f == nil {
 		return ""
 	}
