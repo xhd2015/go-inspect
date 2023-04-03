@@ -96,6 +96,9 @@ func (c *ControllerFuncs) GenOverlay(g inspect.Global, session inspect.Session) 
 	return c.GenOverlayFn(g, session)
 }
 
+func GetTmpRewriteRoot(name string) string {
+	return path.Join(os.TempDir(), name)
+}
 func GetRewriteRoot(root string, name string) string {
 	return path.Join(root, name)
 }
