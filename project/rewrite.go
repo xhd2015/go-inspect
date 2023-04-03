@@ -3,6 +3,7 @@ package project
 import (
 	"fmt"
 	"go/ast"
+	"os"
 	"path"
 
 	"github.com/xhd2015/go-inspect/inspect"
@@ -23,6 +24,7 @@ type BuildOpts struct {
 type RewriteOpts struct {
 	BuildOpts *BuildOpts
 
+	RewriteRoot string // default: a randomly made temp dir
 	RewriteName string // default: code-lens-agent
 
 	// ShouldRewritePackage an extra filter to include other packages
@@ -155,7 +157,11 @@ func doRewriteNoCheckPanic(loadArgs []string, opts *RewriteCallbackOpts) (proj *
 	if rewriteName == "" {
 		rewriteName = "go-inspect"
 	}
-	rewriteRoot := rewrite.GetTmpRewriteRoot(rewriteName)
+	rewriteBase := opts.RewriteOpts.RewriteRoot
+	if rewriteBase == "" {
+		rewriteBase = os.TempDir()
+	}
+	rewriteRoot := rewrite.GetRewriteRoot(rewriteBase, rewriteName)
 
 	projectAbsDir, err := util.ToAbsPath(buildOpts.ProjectDir)
 	if err != nil {
