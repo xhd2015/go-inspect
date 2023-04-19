@@ -22,6 +22,7 @@ func TestRewriteStdRuntimeGenInPlace(t *testing.T) {
 				runtimePkg := g.GetPkg("runtime")
 				edit := session.PackageEdit(runtimePkg, "export_getg")
 				edit.AddCode(fmt.Sprintf(`func Getg_GoInspectExported() *g { return getg() }`))
+				edit.AddCode(fmt.Sprintf(`func Getcurg_GoInspectExported() *g { return getg().m.curg }`))
 
 				// must check if we have imported the package, if not, dont do rewrite
 				exportGPkg := g.GetPkg("github.com/xhd2015/go-inspect/project/testdata/export_g")
@@ -40,7 +41,7 @@ func TestRewriteStdRuntimeGenInPlace(t *testing.T) {
 
 				func init(){
 					export_g.GetImpl = func() unsafe.Pointer { 
-						return unsafe.Pointer(runtime.Getg_GoInspectExported())
+						return unsafe.Pointer(runtime.Getcurg_GoInspectExported())
 					}
 				}`))
 

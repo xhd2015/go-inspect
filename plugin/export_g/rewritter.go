@@ -45,7 +45,12 @@ func (c *rewritter) GenOverlay(proj project.Project, session inspect.Session) {
 	// export the runtime.getg()
 	runtimePkg := g.GetPkg("runtime")
 	edit := session.PackageEdit(runtimePkg, "export_getg")
+	// TODO
 	edit.AddCode(`func Getg_GoInspectExported() *g { return getg() }`)
+
+	// use getg().m.curg instead of getg()
+	// see: https://github.com/golang/go/blob/master/src/runtime/HACKING.md
+	edit.AddCode(`func Getcurg_GoInspectExported() *g { return getg().m.curg }`)
 
 	// add an extra package with name 0 to make it import earlier than others
 	pkgDir := proj.AllocExtraPkg("0_init_getg")
@@ -60,7 +65,7 @@ import (
 
 func init(){
 	getg.GetImpl = func() unsafe.Pointer { 
-		return unsafe.Pointer(runtime.Getg_GoInspectExported())
+		return unsafe.Pointer(runtime.Getcurg_GoInspectExported())
 	}
 }`)
 
