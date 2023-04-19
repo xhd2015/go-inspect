@@ -1,7 +1,6 @@
 package export_g
 
 import (
-	"log"
 	"path"
 
 	"github.com/xhd2015/go-inspect/inspect"
@@ -36,11 +35,11 @@ func (c *rewritter) GenOverlay(proj project.Project, session inspect.Session) {
 	g := proj.Global()
 
 	// must check if we have imported the package, if not, dont do rewrite
-	exportGPkg := g.GetPkg("github.com/xhd2015/go-inspect/plugin/getg")
-	if exportGPkg == nil {
-		log.Printf("NOTE: github.com/xhd2015/go-inspect/plugin/getg is not used, skip exporting runtime.getg()")
-		return
-	}
+	// exportGPkg := g.GetPkg("github.com/xhd2015/go-inspect/plugin/getg")
+	// if exportGPkg == nil {
+	// 	log.Printf("NOTE: github.com/xhd2015/go-inspect/plugin/getg is not used, skip exporting runtime.getg()")
+	// 	return
+	// }
 
 	// export the runtime.getg()
 	runtimePkg := g.GetPkg("runtime")
