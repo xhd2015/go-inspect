@@ -1,7 +1,6 @@
 package export_g
 
 import (
-	"fmt"
 	"log"
 	"path"
 
@@ -46,11 +45,11 @@ func (c *rewritter) GenOverlay(proj project.Project, session inspect.Session) {
 	// export the runtime.getg()
 	runtimePkg := g.GetPkg("runtime")
 	edit := session.PackageEdit(runtimePkg, "export_getg")
-	edit.AddCode(fmt.Sprintf(`func Getg_GoInspectExported() *g { return getg() }`))
+	edit.AddCode(`func Getg_GoInspectExported() *g { return getg() }`)
 
 	// add an extra package with name 0 to make it import earlier than others
-	pkgDir := proj.AllocExtraPkg("0")
-	proj.NewFile(path.Join(pkgDir, "export_g_runtime_impl.go"), fmt.Sprintf(`package init_getg
+	pkgDir := proj.AllocExtraPkg("0_init_getg")
+	proj.NewFile(path.Join(pkgDir, "export_g_runtime_impl.go"), `package init_getg
 
 import (
 	"runtime"
@@ -63,9 +62,9 @@ func init(){
 	getg.GetImpl = func() unsafe.Pointer { 
 		return unsafe.Pointer(runtime.Getg_GoInspectExported())
 	}
-}`))
+}`)
 
 	// import from main
-	gedit := session.PackageEdit(proj.MainPkg(), "0")
+	gedit := session.PackageEdit(proj.MainPkg(), "0_export_g")
 	gedit.MustImport(path.Join(proj.MainPkg().Path(), path.Base(pkgDir)), "export_getg", "_", nil)
 }
