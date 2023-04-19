@@ -34,6 +34,8 @@ func (c *rewritter) BeforeLoad(proj project.Project) {
 func (c *rewritter) GenOverlay(proj project.Project, session inspect.Session) {
 	g := proj.Global()
 
+	// update: skip getg check because a framework may transparently use it
+	//
 	// must check if we have imported the package, if not, dont do rewrite
 	// exportGPkg := g.GetPkg("github.com/xhd2015/go-inspect/plugin/getg")
 	// if exportGPkg == nil {
