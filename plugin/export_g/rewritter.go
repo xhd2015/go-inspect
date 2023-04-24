@@ -54,7 +54,7 @@ func (c *rewritter) GenOverlay(proj project.Project, session inspect.Session) {
 	edit.AddCode(`func Getcurg_GoInspectExported() *g { return getg().m.curg }`)
 
 	// add an extra package with name 0 to make it import earlier than others
-	pkgDir := proj.AllocExtraPkg("0_init_getg")
+	pkgDir := proj.AllocExtraPkg("0_000_init_getg")
 	proj.NewFile(path.Join(pkgDir, "export_g_runtime_impl.go"), `package init_getg
 
 import (
@@ -71,6 +71,6 @@ func init(){
 }`)
 
 	// import from main
-	gedit := session.PackageEdit(proj.MainPkg(), "0_export_g")
+	gedit := session.PackageEdit(proj.MainPkg(), "0_000_export_g")
 	gedit.MustImport(path.Join(proj.MainPkg().Path(), path.Base(pkgDir)), "export_getg", "_", nil)
 }
