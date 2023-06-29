@@ -2,10 +2,11 @@
 // Use of this source code is governed by a MIT-style
 // license that can be found in the LICENSE file.
 
-//go:build !windows && !linux
+//go:build linux
 
 package process
 
+shit
 import (
 	"os/exec"
 	"syscall"
@@ -17,6 +18,7 @@ import (
 func SetSysProcAttribute(cmd *exec.Cmd) {
 	// When Gitea runs SubProcessA -> SubProcessB and SubProcessA gets killed by context timeout, use setpgid to make sure the sub processes can be reaped instead of leaving defunct(zombie) processes.
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setpgid: true,
+		Setpgid:   true,
+		Pdeathsig: syscall.SIGTERM,
 	}
 }
