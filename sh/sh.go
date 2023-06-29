@@ -7,6 +7,8 @@ import (
 	"log"
 	"os/exec"
 	"strings"
+
+	"github.com/xhd2015/go-inspect/sh/process"
 )
 
 func RunBash(cmdList []string, verbose bool) error {
@@ -41,6 +43,7 @@ func RunBashWithOpts(cmdList []string, opts RunBashOptions) (stdout string, stde
 	if opts.FilterCmd != nil {
 		opts.FilterCmd(cmd)
 	}
+	process.SetSysProcAttribute(cmd)
 	err = cmd.Run()
 	if err != nil {
 		cmdDetail := ""
