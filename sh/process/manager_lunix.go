@@ -6,7 +6,6 @@
 
 package process
 
-shit
 import (
 	"os/exec"
 	"syscall"
