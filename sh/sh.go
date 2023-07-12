@@ -23,6 +23,8 @@ type RunBashOptions struct {
 	NeedStdErr bool
 	NeedStdOut bool
 
+	Args []string
+
 	ErrExcludeCmd bool
 
 	// if StdoutToJSON != nil, the value is parsed into this struct
@@ -35,7 +37,15 @@ func RunBashWithOpts(cmdList []string, opts RunBashOptions) (stdout string, stde
 	if opts.Verbose {
 		log.Printf("%s", cmdExpr)
 	}
-	cmd := exec.Command("bash", "-c", cmdExpr)
+	list := make([]string, 2+len(opts.Args))
+	list[0] = "-c"
+	list[1] = cmdExpr
+	for i, arg := range opts.Args {
+		list[i+2] = arg
+	}
+
+	// bash -c cmdExpr args...
+	cmd := exec.Command("bash", list...)
 	stdoutBuf := bytes.NewBuffer(nil)
 	stderrBuf := bytes.NewBuffer(nil)
 	cmd.Stdout = stdoutBuf
