@@ -7,6 +7,7 @@ import (
 	"log"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/xhd2015/go-inspect/sh/process"
 )
@@ -23,9 +24,12 @@ type RunBashOptions struct {
 	NeedStdErr bool
 	NeedStdOut bool
 
+	StdoutNoTrim bool
+
 	Args []string
 
 	ErrExcludeCmd bool
+	Timeout       time.Duration
 
 	// if StdoutToJSON != nil, the value is parsed into this struct
 	StdoutToJSON interface{}
@@ -54,27 +58,73 @@ func RunBashWithOpts(cmdList []string, opts RunBashOptions) (stdout string, stde
 		opts.FilterCmd(cmd)
 	}
 	process.SetSysProcAttribute(cmd)
-	err = cmd.Run()
-	if err != nil {
-		cmdDetail := ""
-		if !opts.ErrExcludeCmd {
-			cmdDetail = fmt.Sprintf("cmd %s ", cmdExpr)
+
+	getCmdDetail := func() string {
+		if opts.ErrExcludeCmd {
+			return ""
 		}
-		err = fmt.Errorf("running cmd error: %s%v stdout:%s stderr:%s", cmdDetail, err, stdoutBuf.String(), stderrBuf.String())
+		return fmt.Sprintf("cmd %s ", cmdExpr)
+
+	}
+
+	run := func() (stdout string, stderr string, err error) {
+		err = cmd.Run()
+		if err != nil {
+			cmdDetail := getCmdDetail()
+			err = fmt.Errorf("running cmd error: %s%v stdout:%s stderr:%s", cmdDetail, err, stdoutBuf.String(), stderrBuf.String())
+			return
+		}
+		if opts.NeedStdOut {
+			stdout = stdoutBuf.String()
+			if !opts.StdoutNoTrim {
+				stdout = strings.TrimSuffix(stdout, "\n")
+			}
+		}
+		if opts.NeedStdErr {
+			stderr = stderrBuf.String()
+		}
+		if opts.StdoutToJSON != nil {
+			err = json.Unmarshal(stdoutBuf.Bytes(), opts.StdoutToJSON)
+			if err != nil {
+				err = fmt.Errorf("parse command output to %T error:%v", opts.StdoutToJSON, err)
+			}
+		}
 		return
 	}
-	if opts.NeedStdOut {
-		stdout = stdoutBuf.String()
-	}
-	if opts.NeedStdErr {
-		stderr = stderrBuf.String()
-	}
-	if opts.StdoutToJSON != nil {
-		err = json.Unmarshal(stdoutBuf.Bytes(), opts.StdoutToJSON)
-		if err != nil {
-			err = fmt.Errorf("parse command output to %T error:%v", opts.StdoutToJSON, err)
+
+	if opts.Timeout > 0 {
+		timeoutCh := time.After(opts.Timeout)
+		done := make(chan struct{})
+		var subStdout string
+		var subStderr string
+		var subErr error
+		go func() {
+			defer func() {
+				if e := recover(); e != nil {
+					if e := e.(error); e != nil {
+						subErr = e
+					} else {
+						subErr = fmt.Errorf("panic %v", e)
+					}
+				}
+				close(done)
+			}()
+			subStdout, subStderr, subErr = run()
+		}()
+		select {
+		case <-timeoutCh:
+			err = fmt.Errorf("cmd timeout after %v: %s", opts.Timeout, getCmdDetail())
+			if cmd.Process != nil {
+				// ensure the process is killed
+				cmd.Process.Kill()
+			}
+		case <-done:
+			stdout, stderr, err = subStdout, subStderr, subErr
 		}
+	} else {
+		stdout, stderr, err = run()
 	}
+
 	return
 }
 
