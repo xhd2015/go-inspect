@@ -32,8 +32,9 @@ type RunBashOptions struct {
 	Timeout       time.Duration
 
 	// if StdoutToJSON != nil, the value is parsed into this struct
-	StdoutToJSON interface{}
-	FilterCmd    func(cmd *exec.Cmd)
+	StdoutToJSON  interface{}
+	StdoutToBytes *[]byte
+	FilterCmd     func(cmd *exec.Cmd)
 }
 
 func RunBashWithOpts(cmdList []string, opts RunBashOptions) (stdout string, stderr string, err error) {
@@ -83,7 +84,9 @@ func RunBashWithOpts(cmdList []string, opts RunBashOptions) (stdout string, stde
 		if opts.NeedStdErr {
 			stderr = stderrBuf.String()
 		}
-		if opts.StdoutToJSON != nil {
+		if opts.StdoutToBytes != nil {
+			*opts.StdoutToBytes = stdoutBuf.Bytes()
+		} else if opts.StdoutToJSON != nil {
 			err = json.Unmarshal(stdoutBuf.Bytes(), opts.StdoutToJSON)
 			if err != nil {
 				err = fmt.Errorf("parse command output to %T error:%v", opts.StdoutToJSON, err)
