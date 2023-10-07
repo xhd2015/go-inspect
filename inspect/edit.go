@@ -158,7 +158,7 @@ func (c *session) PackageEdit(p Pkg, kind string) GoNewEdit {
 		realName := util.NextName(func(s string) bool {
 			foundGo := false
 			p.RangeFiles(func(i int, f FileContext) bool {
-				foundGo = foundGo || filepath.Base(f.AbsPath()) == kind+".go"
+				foundGo = foundGo || filepath.Base(f.AbsPath()) == s+".go"
 				return !foundGo
 			})
 			return !foundGo
