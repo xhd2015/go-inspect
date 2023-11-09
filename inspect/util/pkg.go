@@ -66,20 +66,26 @@ func GetStdModule() *packages.Module {
 
 func GetGOROOT() string {
 	gorootInitOnce.Do(func() {
-		if os.Getenv("GOROOT") != "" {
-			goroot = os.Getenv("GOROOT")
-		} else {
-			gorootBytes, err := exec.Command("go", "env", "GOROOT").Output()
-			if err != nil {
-				panic(fmt.Errorf("cannot get GOROOT, please consider add 'export GOROOT=$(go env GOROOT)' and retry"))
-			}
-			goroot = string(gorootBytes)
-		}
-		if goroot == "" {
-			panic(fmt.Errorf("empty GOROOT, please consider add 'export GOROOT=$(go env GOROOT)' and retry"))
+		var err error
+		goroot, err = ComputeGOROOT()
+		if err != nil {
+			panic(err)
 		}
 	})
 	return goroot
+}
+
+func ComputeGOROOT() (string, error) {
+	goRootEnv := os.Getenv("GOROOT")
+	if goRootEnv != "" {
+		return goRootEnv, nil
+	}
+
+	gorootBytes, err := exec.Command("go", "env", "GOROOT").Output()
+	if err != nil {
+		return "", fmt.Errorf("cannot get GOROOT, please consider add 'export GOROOT=$(go env GOROOT)' and retry")
+	}
+	return strings.TrimSuffix(string(gorootBytes), "\n"), nil
 }
 
 func IsTestPkgOfModule(module string, pkgPath string) bool {
