@@ -1,8 +1,7 @@
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/hashicorp/hcl v1.0.0 h1:0Anlzjpi4vEasTeNFn2mLJgTSwt0+6sfsiTG8qcWGx4=
 github.com/hashicorp/hcl v1.0.0/go.mod h1:E5yfLk+7swimpb2L/Alb/PJmXilQ/rhwaUYs4T20WEQ=
+github.com/xhd2015/go-inspect v0.0.52 h1:SYkt4ZnGgX4q7+yFb8lAt19fxXKSZ8heuZ8TXybfZN8=
 github.com/xhd2015/go-inspect v0.0.52/go.mod h1:oVDaXYFM5Q1xdScKxDluPfpr2kbQVjxUcRWPhNzmDCs=
-github.com/xhd2015/go-objpath v0.0.1 h1:BKbP6GTrYHUUgT/FbQAqp6Wy8b0DA13ww+YAFjP4mTk=
 github.com/xhd2015/go-objpath v0.0.1/go.mod h1:kr5weGR7DdeWPHrZM/PIEU6UgjLMSqCOfiadbrUJ7tg=
 github.com/xhd2015/go-vendor-pack v1.0.0 h1:T3q/0y3itkSh8FF5WKRWWLbOfldAY1hHerUkWELO7Yg=
 github.com/xhd2015/go-vendor-pack v1.0.0/go.mod h1:GEDxq5ZCdMPDTHrpRFE4pau3IQLApjjv4N5bC9RvugY=

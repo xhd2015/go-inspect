@@ -1,0 +1,4 @@
+# github.com/xhd2015/go-inspect/plugin/getg v0.0.2 => ../../getg
+## explicit
+github.com/xhd2015/go-inspect/plugin/getg
+# github.com/xhd2015/go-inspect/plugin/getg => ../../getg
