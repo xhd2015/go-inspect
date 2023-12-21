@@ -28,6 +28,10 @@ type Options interface {
 
 	Verbose() bool
 
+	GetPackageFilter() func(pkg inspect.Pkg) bool
+	SetPackageFiler(filter func(pkg inspect.Pkg) bool)
+	AddPackageFilter(filter func(pkg inspect.Pkg) bool)
+
 	RewriteStd() bool
 	SetRewriteStd(rewriteStd bool)
 
@@ -41,6 +45,25 @@ type Options interface {
 type options struct {
 	opts           *RewriteOpts
 	underlyingOpts *rewrite.BuildRewriteOptions
+}
+
+func (c *options) GetPackageFilter() func(pkg inspect.Pkg) bool {
+	return c.opts.ShouldRewritePackage
+}
+
+func (c *options) SetPackageFiler(filter func(pkg inspect.Pkg) bool) {
+	c.opts.ShouldRewritePackage = filter
+}
+
+func (c *options) AddPackageFilter(filter func(pkg inspect.Pkg) bool) {
+	if c.opts.ShouldRewritePackage == nil {
+		c.opts.ShouldRewritePackage = filter
+		return
+	}
+	prevFilter := c.opts.ShouldRewritePackage
+	c.opts.ShouldRewritePackage = func(pkg inspect.Pkg) bool {
+		return prevFilter(pkg) || filter(pkg)
+	}
 }
 
 // RewriteStd implements Options

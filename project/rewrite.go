@@ -201,15 +201,17 @@ func doRewriteNoCheckPanic(loadArgs []string, opts *RewriteCallbackOpts) (proj *
 		// TODO: add a explicit init function
 		// called first
 		FilterPkgsFn: func(g inspect.Global) func(func(p inspect.Pkg, pkgFlag rewrite.PkgFlag) bool) {
+			pkgFilter := proj.opts.GetPackageFilter()
 			mod := g.LoadInfo().MainModule()
 			return func(f func(p inspect.Pkg, pkgFlag rewrite.PkgFlag) bool) {
 				g.RangePkg(func(pkg inspect.Pkg) bool {
 					// rewrite for the same module
 					if pkg.Module() == mod {
 						f(pkg, rewrite.BitStarterMod)
-					}
-					if opts.ShouldRewritePackage != nil && opts.ShouldRewritePackage(pkg) {
-						f(pkg, rewrite.BitExtra)
+					} else {
+						if pkgFilter != nil && pkgFilter(pkg) {
+							f(pkg, rewrite.BitExtra)
+						}
 					}
 					// DEBUG
 					// pkgPath := pkg.Path()
