@@ -110,6 +110,9 @@ func unpackGetg(proj project.Project) {
 		ForceUpgradeModules: map[string]bool{
 			"github.com/xhd2015/go-inspect/plugin/getg": true,
 		},
+		OptionalSumModules: map[string]bool{
+			"github.com/xhd2015/go-inspect/plugin/getg": true,
+		},
 	})
 	if err != nil {
 		panic(fmt.Errorf("GenOverlay tls: %w", err))
