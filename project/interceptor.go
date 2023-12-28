@@ -4,7 +4,8 @@ import "github.com/xhd2015/go-inspect/inspect"
 
 var projectListeners []func(proj Project) Rewriter
 var beforeLoadListeners []func(proj Project)
-var afterLoadListeners []func(proj Project)
+var initSesssionListeners []func(proj Project, session inspect.Session)
+var afterLoadListeners []func(proj Project, session inspect.Session)
 var genOverlayListeners []func(proj Project, session inspect.Session)
 var rewritePackageListeners []func(proj Project, pkg inspect.Pkg, session inspect.Session)
 var rewriteFileListeners []func(proj Project, f inspect.FileContext, session inspect.Session)
@@ -21,7 +22,14 @@ func OnProjectRewrite(fn func(proj Project) Rewriter) {
 func BeforeLoad(fn func(proj Project)) {
 	beforeLoadListeners = append(beforeLoadListeners, fn)
 }
-func AfterLoad(fn func(proj Project)) {
+
+
+// BeforeLoad called for all projects
+func InitSesson(fn func(proj Project,session inspect.Session)) {
+	initSesssionListeners = append(initSesssionListeners, fn)
+}
+
+func AfterLoad(fn func(proj Project,session inspect.Session)) {
 	afterLoadListeners = append(afterLoadListeners, fn)
 }
 

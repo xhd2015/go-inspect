@@ -52,6 +52,7 @@ type Project interface {
 	ShortHash(s string) string
 	ShortHashFile(f inspect.FileContext) string
 
+	// Deprecated use session.Data() instead
 	// SetData makes project serve as a context
 	SetData(key interface{}, value interface{})
 	GetData(key interface{}) (value interface{}, ok bool)

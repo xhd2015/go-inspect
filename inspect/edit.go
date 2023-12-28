@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/token"
 	"path/filepath"
+	"sync"
 
 	"github.com/xhd2015/go-inspect/code/edit"
 	"github.com/xhd2015/go-inspect/code/gen"
@@ -13,6 +14,9 @@ import (
 // Session session represents a rewrite pass
 type Session interface {
 	Global() Global
+
+	Data() Data
+
 	// FileRewrite
 	// rewrite of the source file
 	FileRewrite(f FileContext) GoRewriteEdit
@@ -26,6 +30,13 @@ type Session interface {
 
 	// Gen generates contents
 	Gen(callback EditCallback)
+}
+
+type Data interface {
+	GetOK(key interface{}) (val interface{}, ok bool)
+	Get(key interface{}) interface{}
+	Set(key interface{}, val interface{})
+	Del(key interface{})
 }
 
 type EditCallback interface {
@@ -101,7 +112,8 @@ type GoNewEdit interface {
 }
 
 type session struct {
-	g Global
+	g    Global
+	data *sessionData
 
 	fileEditMap    util.SyncMap
 	fileRewriteMap util.SyncMap
@@ -112,8 +124,32 @@ var _ Session = ((*session)(nil))
 
 func NewSession(g Global) Session {
 	return &session{
-		g: g,
+		g:    g,
+		data: &sessionData{},
 	}
+}
+
+type sessionData struct {
+	m sync.Map
+}
+
+var _ Data = (*sessionData)(nil)
+
+func (c *sessionData) GetOK(key interface{}) (val interface{}, ok bool) {
+	return c.m.Load(key)
+}
+
+func (c *sessionData) Get(key interface{}) interface{} {
+	val, _ := c.m.Load(key)
+	return val
+}
+
+func (c *sessionData) Set(key interface{}, val interface{}) {
+	c.m.Store(key, val)
+}
+
+func (c *sessionData) Del(key interface{}) {
+	c.m.Delete(key)
 }
 
 type fileEntry struct {
@@ -130,6 +166,10 @@ type pkgEntry struct {
 // Global implements Session
 func (c *session) Global() Global {
 	return c.g
+}
+
+func (c *session) Data() Data {
+	return c.data
 }
 
 // FileEdit implements Session

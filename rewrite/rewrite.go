@@ -21,7 +21,8 @@ import (
 
 type Controller interface {
 	BeforeLoad(opts *BuildRewriteOptions)
-	AfterLoad(g inspect.Global)
+	InitSession(g inspect.Global, session inspect.Session)
+	AfterLoad(g inspect.Global, session inspect.Session)
 	// FilterPkgs, defaults to starter packages
 	FilterPkgs(g inspect.Global) func(func(p inspect.Pkg, pkgFlag PkgFlag) bool)
 	BeforeCopy(g inspect.Global, session inspect.Session)
@@ -32,11 +33,12 @@ type Controller interface {
 }
 
 type ControllerFuncs struct {
-	BeforeLoadFn func(opts *BuildRewriteOptions)
-	AfterLoadFn  func(g inspect.Global)
-	FilterPkgsFn func(g inspect.Global) func(func(p inspect.Pkg, pkgFlag PkgFlag) bool)
-	BeforeCopyFn func(g inspect.Global, session inspect.Session)
-	GenOverlayFn func(g inspect.Global, session inspect.Session) map[string]*Content
+	BeforeLoadFn  func(opts *BuildRewriteOptions)
+	InitSessionFn func(g inspect.Global, session inspect.Session)
+	AfterLoadFn   func(g inspect.Global, session inspect.Session)
+	FilterPkgsFn  func(g inspect.Global) func(func(p inspect.Pkg, pkgFlag PkgFlag) bool)
+	BeforeCopyFn  func(g inspect.Global, session inspect.Session)
+	GenOverlayFn  func(g inspect.Global, session inspect.Session) map[string]*Content
 }
 type Content struct {
 	SrcFile string
@@ -68,12 +70,18 @@ func (c *ControllerFuncs) BeforeLoad(opts *BuildRewriteOptions) {
 	}
 	c.BeforeLoadFn(opts)
 }
+func (c *ControllerFuncs) InitSession(g inspect.Global, session inspect.Session) {
+	if c.InitSessionFn == nil {
+		return
+	}
+	c.InitSessionFn(g, session)
+}
 
-func (c *ControllerFuncs) AfterLoad(g inspect.Global) {
+func (c *ControllerFuncs) AfterLoad(g inspect.Global, session inspect.Session) {
 	if c.AfterLoadFn == nil {
 		return
 	}
-	c.AfterLoadFn(g)
+	c.AfterLoadFn(g, session)
 }
 
 func (c *ControllerFuncs) FilterPkgs(g inspect.Global) func(func(p inspect.Pkg, pkgFlag PkgFlag) bool) {
@@ -162,7 +170,15 @@ func GenRewrite(args []string, rootDir string, ctrl Controller, rewritter inspec
 		err = fmt.Errorf("loading packages err: %v", err)
 		return
 	}
-	ctrl.AfterLoad(g)
+	// create a session, and rewrite
+	session := inspect.NewSession(g)
+
+	// give everyone a chance to init necessary data
+	// logic in this phase should be as lightweight as possible
+	ctrl.InitSession(g, session)
+
+	// starts to do heavy logic
+	ctrl.AfterLoad(g, session)
 
 	loadPkgEnd := time.Now()
 	if verboseCost {
@@ -203,8 +219,6 @@ func GenRewrite(args []string, rootDir string, ctrl Controller, rewritter inspec
 		log.Printf("COST load package -> rewrite package:%v", rewriteTime.Sub(loadPkgEnd))
 	}
 
-	// create a session, and rewrite
-	session := inspect.NewSession(g)
 	inspect.VisitAll(func(f func(pkg inspect.Pkg) bool) {
 		pkgsFn(func(p inspect.Pkg, pkgFlag PkgFlag) bool {
 			return f(p)

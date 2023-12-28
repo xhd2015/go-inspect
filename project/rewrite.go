@@ -59,12 +59,20 @@ func Rewrite(loadArgs []string, opts *RewriteOpts) *RewriteResult {
 					callback.BeforeLoad(proj)
 				}
 			},
-			AfterLoad: func(proj Project) {
-				for _, f := range afterLoadListeners {
-					f(proj)
+			InitSession: func(proj Project, session inspect.Session) {
+				for _, f := range initSesssionListeners {
+					f(proj, session)
 				}
 				for _, callback := range extraCallbacks {
-					callback.AfterLoad(proj)
+					callback.InitSession(proj, session)
+				}
+			},
+			AfterLoad: func(proj Project, session inspect.Session) {
+				for _, f := range afterLoadListeners {
+					f(proj, session)
+				}
+				for _, callback := range extraCallbacks {
+					callback.AfterLoad(proj, session)
 				}
 			},
 			GenOverlay: func(proj Project, session inspect.Session) {
@@ -186,9 +194,8 @@ func doRewriteNoCheckPanic(loadArgs []string, opts *RewriteCallbackOpts) (proj *
 			}
 			opts.BeforeLoad(proj)
 		},
-		AfterLoadFn: func(g inspect.Global) {
+		InitSessionFn: func(g inspect.Global, session inspect.Session) {
 			proj.g = g
-
 			// find the first package, define that as main
 			// packages
 			pkgs := g.LoadInfo().StarterPkgs()
@@ -196,7 +203,11 @@ func doRewriteNoCheckPanic(loadArgs []string, opts *RewriteCallbackOpts) (proj *
 				panic(fmt.Errorf("no packages"))
 			}
 			proj.mainPkg = pkgs[0]
-			opts.AfterLoad(proj)
+
+			opts.InitSession(proj, session)
+		},
+		AfterLoadFn: func(g inspect.Global, session inspect.Session) {
+			opts.AfterLoad(proj, session)
 		},
 		// TODO: add a explicit init function
 		// called first

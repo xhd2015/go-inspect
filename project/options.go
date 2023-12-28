@@ -7,7 +7,8 @@ import (
 
 type Rewriter interface {
 	BeforeLoad(proj Project)
-	AfterLoad(proj Project)
+	InitSession(proj Project, session inspect.Session)
+	AfterLoad(proj Project, session inspect.Session)
 	GenOverlay(proj Project, session inspect.Session)
 	RewritePackage(proj Project, pkg inspect.Pkg, session inspect.Session)
 	RewriteFile(proj Project, f inspect.FileContext, session inspect.Session)
@@ -16,7 +17,8 @@ type Rewriter interface {
 }
 type RewriteCallback struct {
 	BeforeLoad     func(proj Project)
-	AfterLoad      func(proj Project)
+	InitSession    func(proj Project, session inspect.Session)
+	AfterLoad      func(proj Project, session inspect.Session)
 	GenOverlay     func(proj Project, session inspect.Session)
 	RewritePackage func(proj Project, pkg inspect.Pkg, session inspect.Session)
 	RewriteFile    func(proj Project, f inspect.FileContext, session inspect.Session)
@@ -120,9 +122,14 @@ func (c *defaultRewriter) BeforeLoad(proj Project) {
 	}
 }
 
-func (c *defaultRewriter) AfterLoad(proj Project) {
+func (c *defaultRewriter) InitSession(proj Project, session inspect.Session) {
+	if c.RewriteCallback.InitSession != nil {
+		c.RewriteCallback.InitSession(proj, session)
+	}
+}
+func (c *defaultRewriter) AfterLoad(proj Project, session inspect.Session) {
 	if c.RewriteCallback.AfterLoad != nil {
-		c.RewriteCallback.AfterLoad(proj)
+		c.RewriteCallback.AfterLoad(proj, session)
 	}
 }
 
