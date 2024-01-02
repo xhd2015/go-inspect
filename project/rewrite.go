@@ -190,8 +190,10 @@ func doRewriteNoCheckPanic(loadArgs []string, opts *RewriteCallbackOpts) (proj *
 				rewriteProjectRoot: projectRewriteRoot,
 				projectRoot:        projectAbsDir,
 				genMap:             genMap,
+				vendor:             hasVendorDir(projectAbsDir),
 				ctxData:            make(map[interface{}]interface{}),
 			}
+
 			opts.BeforeLoad(proj)
 		},
 		InitSessionFn: func(g inspect.Global, session inspect.Session) {
@@ -309,4 +311,16 @@ func doRewriteNoCheckPanic(loadArgs []string, opts *RewriteCallbackOpts) (proj *
 		BuildResult: res,
 	}
 	return
+}
+
+func hasVendorDir(projectAbsDir string) bool {
+	vendorDir := path.Join(projectAbsDir, "vendor")
+	stat, err := os.Stat(vendorDir)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			panic(fmt.Errorf("stating vendor directory: %v", err))
+		}
+		return false
+	}
+	return stat.IsDir()
 }

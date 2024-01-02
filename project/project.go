@@ -47,6 +47,8 @@ type Project interface {
 	RewriteRoot() string
 	RewriteProjectRoot() string
 
+	IsVendor() bool
+
 	// static tool
 	HasImportPkg(f *ast.File, pkgNameQuoted string) bool
 	ShortHash(s string) string
@@ -69,6 +71,8 @@ type project struct {
 	rewriteRoot        string
 	rewriteProjectRoot string
 	genMap             map[string]*rewrite.Content
+
+	vendor bool
 
 	ctxData map[interface{}]interface{}
 }
@@ -103,6 +107,10 @@ func (c *project) RewriteRoot() string {
 // TargetDir implements Project
 func (c *project) RewriteProjectRoot() string {
 	return c.rewriteProjectRoot
+}
+
+func (c *project) IsVendor() bool {
+	return c.vendor
 }
 
 // MainPkg implements Session
