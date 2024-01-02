@@ -31,8 +31,8 @@ func NewRewritter() project.Rewriter {
 }
 
 // BeforeLoad implements project.Rewriter
-func (c *rewritter) BeforeLoad(proj project.Project) {
-	proj.Options().SetRewriteStd(true)
+func (c *rewritter) BeforeLoad(proj project.Project, session inspect.Session) {
+	session.Options().SetRewriteStd(true)
 }
 
 // GenOverlay implements project.Rewriter

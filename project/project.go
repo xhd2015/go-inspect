@@ -17,7 +17,7 @@ type Project interface {
 
 	// Options return the options to be
 	// used, guranteed to be not nil
-	Options() Options
+	Options() LoadOptions
 	Args() []string
 
 	// AllocExtraPkg under main
@@ -47,6 +47,8 @@ type Project interface {
 	RewriteRoot() string
 	RewriteProjectRoot() string
 
+	IsVendor() bool
+
 	// static tool
 	HasImportPkg(f *ast.File, pkgNameQuoted string) bool
 	ShortHash(s string) string
@@ -58,18 +60,49 @@ type Project interface {
 	GetData(key interface{}) (value interface{}, ok bool)
 }
 
+type sessionDirs struct {
+	projectRoot string
+	rewriteRoot string
+
+	rewriteProjectRoot string // {rewriteRoot}/{projectRoot}/source
+
+	rewriteProjectVendorRoot string // {rewriteRoot}/{projectRoot}/vendor
+}
+
+func (c *sessionDirs) RewriteRoot() string {
+	return c.rewriteRoot
+}
+func (c *sessionDirs) ProjectRoot() string {
+	return c.projectRoot
+}
+
+func (c *sessionDirs) RewriteProjectRoot() string {
+	return c.rewriteProjectRoot
+}
+func (c *sessionDirs) RewriteProjectVendorRoot() string {
+	return c.rewriteProjectVendorRoot
+}
+
 var _ Project = ((*project)(nil))
 
 type project struct {
-	g                  inspect.Global
-	mainPkg            inspect.Pkg
-	opts               *options
-	args               []string
-	projectRoot        string
+	g           inspect.Global
+	mainPkg     inspect.Pkg
+	opts        *loadOptions
+	args        []string
+	projectRoot string
+
+	// TODO: move these fields to session
 	rewriteRoot        string
 	rewriteProjectRoot string
-	genMap             map[string]*rewrite.Content
 
+	// TODO: move to session
+	genMap map[string]*rewrite.Content
+
+	vendor bool
+
+	// deprecated
+	// use session.Data() instead
 	ctxData map[interface{}]interface{}
 }
 
@@ -84,7 +117,7 @@ func (c *project) AllocExtraPkgAt(dir string, name string) (fileName string) {
 }
 
 // Options implements Project
-func (c *project) Options() Options {
+func (c *project) Options() LoadOptions {
 	return c.opts
 }
 func (c *project) Args() []string {
@@ -103,6 +136,10 @@ func (c *project) RewriteRoot() string {
 // TargetDir implements Project
 func (c *project) RewriteProjectRoot() string {
 	return c.rewriteProjectRoot
+}
+
+func (c *project) IsVendor() bool {
+	return c.vendor
 }
 
 // MainPkg implements Session

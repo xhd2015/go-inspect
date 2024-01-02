@@ -20,6 +20,8 @@ type Module interface {
 	OrigPath() string // original non-replaced
 	OrigDir() string  // original non-replaced
 
+	ModInfo() *packages.Module
+
 	// IsStd is the standard module? If so, Dir refers to GOROOT/src
 	IsStd() bool
 }
@@ -96,6 +98,10 @@ func (c *mod) OrigDir() string {
 // OrigPath implements Module
 func (c *mod) OrigPath() string {
 	return c.mod.Path
+}
+
+func (c *mod) ModInfo() *packages.Module {
+	return c.mod
 }
 
 // Global implements Module

@@ -6,7 +6,7 @@ import (
 )
 
 type Rewriter interface {
-	BeforeLoad(proj Project)
+	BeforeLoad(proj Project, session inspect.Session)
 	InitSession(proj Project, session inspect.Session)
 	AfterLoad(proj Project, session inspect.Session)
 	GenOverlay(proj Project, session inspect.Session)
@@ -16,7 +16,7 @@ type Rewriter interface {
 	Finish(proj Project, err error, result *RewriteResult)
 }
 type RewriteCallback struct {
-	BeforeLoad     func(proj Project)
+	BeforeLoad     func(proj Project, session inspect.Session)
 	InitSession    func(proj Project, session inspect.Session)
 	AfterLoad      func(proj Project, session inspect.Session)
 	GenOverlay     func(proj Project, session inspect.Session)
@@ -24,24 +24,45 @@ type RewriteCallback struct {
 	RewriteFile    func(proj Project, f inspect.FileContext, session inspect.Session)
 	Finish         func(proj Project, err error, result *RewriteResult)
 }
-type Options interface {
-	Force() bool
-	SetForce(force bool)
 
+// LoadOptions are options that only
+// related to load info that cannot be changed
+// This is to make the build process reproducible,
+// and is visible to user
+type LoadOptions interface {
 	Verbose() bool
-
-	GetPackageFilter() func(pkg inspect.Pkg) bool
-	SetPackageFiler(filter func(pkg inspect.Pkg) bool)
-	AddPackageFilter(filter func(pkg inspect.Pkg) bool)
-
-	RewriteStd() bool
-	SetRewriteStd(rewriteStd bool)
 
 	// GoFlags are common to load and build
 	GoFlags() []string
 
 	// BuildFlags only apply to build
 	BuildFlags() []string
+}
+
+type Options = inspect.Options
+
+type loadOptions struct {
+	verbose bool
+
+	goFlags    []string // passed to go load
+	buildFlags []string // passed to go build
+}
+
+var _ LoadOptions = (*loadOptions)(nil)
+
+// BuildFlags implements LoadOptions.
+func (c *loadOptions) BuildFlags() []string {
+	return c.buildFlags
+}
+
+// GoFlags implements LoadOptions.
+func (c *loadOptions) GoFlags() []string {
+	return c.goFlags
+}
+
+// Verbose implements LoadOptions.
+func (c *loadOptions) Verbose() bool {
+	return c.verbose
 }
 
 type options struct {
@@ -116,9 +137,9 @@ func NewDefaultRewriter(callback *RewriteCallback) Rewriter {
 }
 
 // Init implements Rewriter
-func (c *defaultRewriter) BeforeLoad(proj Project) {
+func (c *defaultRewriter) BeforeLoad(proj Project, session inspect.Session) {
 	if c.RewriteCallback.BeforeLoad != nil {
-		c.RewriteCallback.BeforeLoad(proj)
+		c.RewriteCallback.BeforeLoad(proj, session)
 	}
 }
 

@@ -15,7 +15,11 @@ import (
 type Session interface {
 	Global() Global
 
+	Options() Options
+
 	Data() Data
+
+	Dirs() SessionDirs
 
 	// FileRewrite
 	// rewrite of the source file
@@ -30,6 +34,13 @@ type Session interface {
 
 	// Gen generates contents
 	Gen(callback EditCallback)
+}
+
+type SessionDirs interface {
+	ProjectRoot() string
+	RewriteRoot() string
+	RewriteProjectRoot() string
+	RewriteProjectVendorRoot() string
 }
 
 type Data interface {
@@ -114,6 +125,9 @@ type GoNewEdit interface {
 type session struct {
 	g    Global
 	data *sessionData
+	dirs SessionDirs
+
+	opts Options
 
 	fileEditMap    util.SyncMap
 	fileRewriteMap util.SyncMap
@@ -122,10 +136,29 @@ type session struct {
 
 var _ Session = ((*session)(nil))
 
-func NewSession(g Global) Session {
+func NewSession(g Global, opts Options) Session {
 	return &session{
 		g:    g,
+		opts: opts,
 		data: &sessionData{},
+	}
+}
+
+func OnSessionOpts(s Session, opts Options) {
+	if s, ok := s.(*session); ok {
+		s.opts = opts
+	}
+}
+
+func OnSessionDirs(s Session, dirs SessionDirs) {
+	if s, ok := s.(*session); ok {
+		s.dirs = dirs
+	}
+}
+
+func OnSessionGlobal(s Session, g Global) {
+	if s, ok := s.(*session); ok {
+		s.g = g
 	}
 }
 
@@ -168,8 +201,17 @@ func (c *session) Global() Global {
 	return c.g
 }
 
+// Options implements Session.
+func (c *session) Options() Options {
+	return c.opts
+}
+
 func (c *session) Data() Data {
 	return c.data
+}
+
+func (c *session) Dirs() SessionDirs {
+	return c.dirs
 }
 
 // FileEdit implements Session

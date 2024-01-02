@@ -115,7 +115,7 @@ func NewGlobal(fset *token.FileSet, root string, pkgs []*packages.Package) Globa
 		mod := pkg.Module
 		m := modMap[mod.Path]
 		if m == nil {
-			m = NewModule(g, pkg.Module)
+			m = NewModule(g, mod)
 			modMap[mod.Path] = m
 		}
 		newPkg := NewPkg(m, pkg)

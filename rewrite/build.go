@@ -22,43 +22,6 @@ func BuildRewrite(args []string, ctrl Controller, rewritter inspect.Visitor, opt
 type BuildResult struct {
 	Output string
 }
-type BuildOptions struct {
-	Verbose     bool
-	ProjectRoot string // default CWD
-	RebaseRoot  string
-	Debug       bool
-	Output      string
-	ForTest     bool
-	GoFlags     []string
-	// extra trim path map to be applied
-	// cleanedModOrigAbsDir - modOrigAbsDir
-	MappedMod map[string]string
-	NewGoROOT string
-}
-type BuildRewriteOptions struct {
-	Verbose        bool
-	VerboseCopy    bool
-	VerboseRewrite bool
-	// VerboseGomod   bool
-	ProjectDir string // the project dir
-	RebaseRoot string
-
-	// RewriteStd should files inside GOROOT/src
-	// be modified?
-	RewriteStd bool
-
-	Force bool // force indicates no cache
-
-	// for load & build
-	ForTest    bool
-	GoFlags    []string // passed to load packages,go build
-	BuildFlags []string // flags only passed to go build, not loading
-
-	// for build
-	Debug     bool
-	Output    string
-	SkipBuild bool
-}
 
 func buildRewrite(args []string, ctrl Controller, rewritter inspect.Visitor, opts *BuildRewriteOptions) (*BuildResult, error) {
 	if opts == nil {

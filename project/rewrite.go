@@ -11,30 +11,8 @@ import (
 	"github.com/xhd2015/go-inspect/rewrite"
 )
 
-type BuildOpts struct {
-	ProjectDir string
-	Verbose    bool
-	Force      bool
-	Debug      bool
-	Output     string
-	ForTest    bool
-	GoFlags    []string // passed to go load
-	BuildFlags []string // passed to go build
-}
-type RewriteOpts struct {
-	BuildOpts *BuildOpts
-
-	RewriteRoot string // default: a randomly made temp dir
-	RewriteName string // default: code-lens-agent
-
-	// ShouldRewritePackage an extra filter to include other packages
-	ShouldRewritePackage func(pkg inspect.Pkg) bool
-
-	// predefined code sets for generated content
-	PreCode map[string]string
-
-	SkipBuild bool
-}
+type BuildOpts = rewrite.BuildOpts
+type RewriteOpts = rewrite.RewriteOpts
 
 type RewriteResult struct {
 	*rewrite.BuildResult
@@ -45,7 +23,7 @@ func Rewrite(loadArgs []string, opts *RewriteOpts) *RewriteResult {
 	return doRewrite(loadArgs, &RewriteCallbackOpts{
 		RewriteOpts: opts,
 		RewriteCallback: &RewriteCallback{
-			BeforeLoad: func(proj Project) {
+			BeforeLoad: func(proj Project, session inspect.Session) {
 				for _, f := range projectListeners {
 					callback := f(proj)
 					if callback != nil {
@@ -53,10 +31,10 @@ func Rewrite(loadArgs []string, opts *RewriteOpts) *RewriteResult {
 					}
 				}
 				for _, f := range beforeLoadListeners {
-					f(proj)
+					f(proj, session)
 				}
 				for _, callback := range extraCallbacks {
-					callback.BeforeLoad(proj)
+					callback.BeforeLoad(proj, session)
 				}
 			},
 			InitSession: func(proj Project, session inspect.Session) {
@@ -176,23 +154,41 @@ func doRewriteNoCheckPanic(loadArgs []string, opts *RewriteCallbackOpts) (proj *
 		panic(fmt.Errorf("get abs dir err:%v", err))
 	}
 	projectRewriteRoot := path.Join(rewriteRoot, projectAbsDir)
+
+	tmpVendorName := util.NextFileNameUnderDir(projectAbsDir, "tmp-vendors", "")
+	rewriteProjectVendorRoot := path.Join(projectRewriteRoot, tmpVendorName)
+
 	genMap := make(map[string]*rewrite.Content)
 
 	ctrl := &rewrite.ControllerFuncs{
-		BeforeLoadFn: func(rwOpts *rewrite.BuildRewriteOptions) {
+		BeforeLoadFn: func(rwOpts *rewrite.BuildRewriteOptions, session inspect.Session) {
+			inspect.OnSessionOpts(session, &options{
+				opts:           opts.RewriteOpts,
+				underlyingOpts: rwOpts,
+			})
+			dirs := &sessionDirs{
+				projectRoot:              projectAbsDir,
+				rewriteRoot:              rewriteRoot,
+				rewriteProjectRoot:       projectRewriteRoot,
+				rewriteProjectVendorRoot: rewriteProjectVendorRoot,
+			}
+			inspect.OnSessionDirs(session, dirs)
+
 			proj = &project{
-				opts: &options{
-					opts:           opts.RewriteOpts,
-					underlyingOpts: rwOpts,
+				opts: &loadOptions{
+					verbose:    opts.BuildOpts.Verbose,
+					goFlags:    opts.BuildOpts.GoFlags,
+					buildFlags: opts.BuildOpts.BuildFlags,
 				},
 				args:               loadArgs,
-				rewriteRoot:        rewriteRoot,
-				rewriteProjectRoot: projectRewriteRoot,
-				projectRoot:        projectAbsDir,
+				rewriteRoot:        dirs.rewriteRoot,
+				rewriteProjectRoot: dirs.rewriteProjectRoot,
+				projectRoot:        dirs.projectRoot,
 				genMap:             genMap,
+				vendor:             hasVendorDir(projectAbsDir),
 				ctxData:            make(map[interface{}]interface{}),
 			}
-			opts.BeforeLoad(proj)
+			opts.BeforeLoad(proj, session)
 		},
 		InitSessionFn: func(g inspect.Global, session inspect.Session) {
 			proj.g = g
@@ -211,8 +207,8 @@ func doRewriteNoCheckPanic(loadArgs []string, opts *RewriteCallbackOpts) (proj *
 		},
 		// TODO: add a explicit init function
 		// called first
-		FilterPkgsFn: func(g inspect.Global) func(func(p inspect.Pkg, pkgFlag rewrite.PkgFlag) bool) {
-			pkgFilter := proj.opts.GetPackageFilter()
+		FilterPkgsFn: func(g inspect.Global, session inspect.Session) func(func(p inspect.Pkg, pkgFlag rewrite.PkgFlag) bool) {
+			pkgFilter := session.Options().GetPackageFilter()
 			mod := g.LoadInfo().MainModule()
 			return func(f func(p inspect.Pkg, pkgFlag rewrite.PkgFlag) bool) {
 				g.RangePkg(func(pkg inspect.Pkg) bool {
@@ -309,4 +305,16 @@ func doRewriteNoCheckPanic(loadArgs []string, opts *RewriteCallbackOpts) (proj *
 		BuildResult: res,
 	}
 	return
+}
+
+func hasVendorDir(projectAbsDir string) bool {
+	vendorDir := path.Join(projectAbsDir, "vendor")
+	stat, err := os.Stat(vendorDir)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			panic(fmt.Errorf("stating vendor directory: %v", err))
+		}
+		return false
+	}
+	return stat.IsDir()
 }

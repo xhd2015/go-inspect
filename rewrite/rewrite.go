@@ -20,11 +20,11 @@ import (
 )
 
 type Controller interface {
-	BeforeLoad(opts *BuildRewriteOptions)
+	BeforeLoad(opts *BuildRewriteOptions, session inspect.Session)
 	InitSession(g inspect.Global, session inspect.Session)
 	AfterLoad(g inspect.Global, session inspect.Session)
 	// FilterPkgs, defaults to starter packages
-	FilterPkgs(g inspect.Global) func(func(p inspect.Pkg, pkgFlag PkgFlag) bool)
+	FilterPkgs(g inspect.Global, session inspect.Session) func(func(p inspect.Pkg, pkgFlag PkgFlag) bool)
 	BeforeCopy(g inspect.Global, session inspect.Session)
 	// GenOverlay generate overlay for src files.
 	// Overlay is a rewritten content of the original file or just a generated content
@@ -33,10 +33,10 @@ type Controller interface {
 }
 
 type ControllerFuncs struct {
-	BeforeLoadFn  func(opts *BuildRewriteOptions)
+	BeforeLoadFn  func(opts *BuildRewriteOptions, session inspect.Session)
 	InitSessionFn func(g inspect.Global, session inspect.Session)
 	AfterLoadFn   func(g inspect.Global, session inspect.Session)
-	FilterPkgsFn  func(g inspect.Global) func(func(p inspect.Pkg, pkgFlag PkgFlag) bool)
+	FilterPkgsFn  func(g inspect.Global, session inspect.Session) func(func(p inspect.Pkg, pkgFlag PkgFlag) bool)
 	BeforeCopyFn  func(g inspect.Global, session inspect.Session)
 	GenOverlayFn  func(g inspect.Global, session inspect.Session) map[string]*Content
 }
@@ -64,11 +64,11 @@ func (c PkgFlag) IsStarterMod() bool {
 	return c&BitStarterMod == 1
 }
 
-func (c *ControllerFuncs) BeforeLoad(opts *BuildRewriteOptions) {
+func (c *ControllerFuncs) BeforeLoad(opts *BuildRewriteOptions, session inspect.Session) {
 	if c.BeforeLoadFn == nil {
 		return
 	}
-	c.BeforeLoadFn(opts)
+	c.BeforeLoadFn(opts, session)
 }
 func (c *ControllerFuncs) InitSession(g inspect.Global, session inspect.Session) {
 	if c.InitSessionFn == nil {
@@ -84,11 +84,11 @@ func (c *ControllerFuncs) AfterLoad(g inspect.Global, session inspect.Session) {
 	c.AfterLoadFn(g, session)
 }
 
-func (c *ControllerFuncs) FilterPkgs(g inspect.Global) func(func(p inspect.Pkg, pkgFlag PkgFlag) bool) {
+func (c *ControllerFuncs) FilterPkgs(g inspect.Global, session inspect.Session) func(func(p inspect.Pkg, pkgFlag PkgFlag) bool) {
 	if c.FilterPkgsFn == nil {
 		return nil
 	}
-	return c.FilterPkgsFn(g)
+	return c.FilterPkgsFn(g, session)
 }
 
 func (c *ControllerFuncs) BeforeCopy(g inspect.Global, session inspect.Session) {
@@ -157,7 +157,10 @@ func GenRewrite(args []string, rootDir string, ctrl Controller, rewritter inspec
 		err = fmt.Errorf("get abs dir err:%v", err)
 		return
 	}
-	ctrl.BeforeLoad(opts)
+	// create a session, and rewrite
+	session := inspect.NewSession(nil /* filled later*/, nil /*filled later: this is a workaround*/)
+
+	ctrl.BeforeLoad(opts, session)
 
 	loadPkgTime := time.Now()
 
@@ -170,8 +173,9 @@ func GenRewrite(args []string, rootDir string, ctrl Controller, rewritter inspec
 		err = fmt.Errorf("loading packages err: %v", err)
 		return
 	}
-	// create a session, and rewrite
-	session := inspect.NewSession(g)
+
+	// hack: this is a workaround
+	inspect.OnSessionGlobal(session, g)
 
 	// give everyone a chance to init necessary data
 	// logic in this phase should be as lightweight as possible
@@ -200,7 +204,7 @@ func GenRewrite(args []string, rootDir string, ctrl Controller, rewritter inspec
 	}
 
 	// filter pkgs
-	pkgsFn := ctrl.FilterPkgs(g)
+	pkgsFn := ctrl.FilterPkgs(g, session)
 	if pkgsFn == nil {
 		// choose starterPkgs
 		pkgsFn = func(f func(p inspect.Pkg, pkgFlag PkgFlag) bool) {
