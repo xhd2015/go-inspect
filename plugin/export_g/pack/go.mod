@@ -1,4 +1,4 @@
-module git.garena.com/shopee/loan-service/credit_backend/credit-testing-framework/support/xgo/rewrite/test_main/pack
+module github.com/xhd2015/go-inspect/plugin/export_g/pack
 
 go 1.14
 

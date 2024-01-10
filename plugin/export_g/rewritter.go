@@ -8,7 +8,6 @@ import (
 	"github.com/xhd2015/go-inspect/inspect"
 	"github.com/xhd2015/go-inspect/project"
 	"github.com/xhd2015/go-inspect/rewrite/session"
-	"github.com/xhd2015/go-vendor-pack/unpack"
 )
 
 //go:generate bash -ec "cd gen_pack && bash gen.sh"
@@ -36,12 +35,15 @@ func (c *rewritter) BeforeLoad(proj session.Project, session session.Session) {
 	session.Options().SetRewriteStd(true)
 }
 
+// BeforeLoad implements project.Rewriter
+func (c *rewritter) AfterLoad(proj session.Project, session session.Session) {
+	// unpack getg
+	importGet(session)
+}
+
 // GenOverlay implements project.Rewriter
 func (c *rewritter) GenOverlay(proj session.Project, session session.Session) {
 	g := proj.Global()
-
-	// unpack getg
-	unpackGetg(proj)
 
 	// update: skip getg check because a framework may generate it on the fly
 	// update(2023.12): now we use unpackGetg to ensure getg always present
@@ -106,16 +108,9 @@ func removeGetgErrMsg(proj session.Project, session session.Session) {
 	})
 }
 
-func unpackGetg(proj session.Project) {
-	err := unpack.UnpackFromBase64Decode(GETG_PACK, proj.RewriteProjectRoot(), &unpack.Options{
-		ForceUpgradeModules: map[string]bool{
-			"github.com/xhd2015/go-inspect/plugin/getg": true,
-		},
-		OptionalSumModules: map[string]bool{
-			"github.com/xhd2015/go-inspect/plugin/getg": true,
-		},
-	})
+func importGet(sess session.Session) {
+	err := sess.ImportPackedModulesBase64(GETG_PACK)
 	if err != nil {
-		panic(fmt.Errorf("GenOverlay tls: %w", err))
+		panic(fmt.Errorf("import getg: %w", err))
 	}
 }

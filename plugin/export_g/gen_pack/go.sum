@@ -3,8 +3,8 @@ github.com/hashicorp/hcl v1.0.0/go.mod h1:E5yfLk+7swimpb2L/Alb/PJmXilQ/rhwaUYs4T
 github.com/xhd2015/go-inspect v0.0.52 h1:SYkt4ZnGgX4q7+yFb8lAt19fxXKSZ8heuZ8TXybfZN8=
 github.com/xhd2015/go-inspect v0.0.52/go.mod h1:oVDaXYFM5Q1xdScKxDluPfpr2kbQVjxUcRWPhNzmDCs=
 github.com/xhd2015/go-objpath v0.0.1/go.mod h1:kr5weGR7DdeWPHrZM/PIEU6UgjLMSqCOfiadbrUJ7tg=
-github.com/xhd2015/go-vendor-pack v1.0.0 h1:T3q/0y3itkSh8FF5WKRWWLbOfldAY1hHerUkWELO7Yg=
-github.com/xhd2015/go-vendor-pack v1.0.0/go.mod h1:GEDxq5ZCdMPDTHrpRFE4pau3IQLApjjv4N5bC9RvugY=
+github.com/xhd2015/go-vendor-pack v1.0.8 h1:nDV3ZamKL4H7SQRV/FZ2Nwl/QvC3qCj38e6AwdsaSY8=
+github.com/xhd2015/go-vendor-pack v1.0.8/go.mod h1:r7ITcWjQqZt41g+HRW71H6hJKtdpatk1ir4D7h2Y3CM=
 github.com/yuin/goldmark v1.4.1/go.mod h1:mwnBkeHKe2W/ZEtQ+71ViKU8L12m81fl3OWwC1Zlc8k=
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
