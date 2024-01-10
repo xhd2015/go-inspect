@@ -3,43 +3,30 @@ package project
 import (
 	"github.com/xhd2015/go-inspect/inspect"
 	"github.com/xhd2015/go-inspect/rewrite"
+	"github.com/xhd2015/go-inspect/rewrite/session"
 )
 
 type Rewriter interface {
-	BeforeLoad(proj Project, session inspect.Session)
-	InitSession(proj Project, session inspect.Session)
-	AfterLoad(proj Project, session inspect.Session)
-	GenOverlay(proj Project, session inspect.Session)
-	RewritePackage(proj Project, pkg inspect.Pkg, session inspect.Session)
-	RewriteFile(proj Project, f inspect.FileContext, session inspect.Session)
+	BeforeLoad(proj session.Project, session session.Session)
+	InitSession(proj session.Project, session session.Session)
+	AfterLoad(proj session.Project, session session.Session)
+	GenOverlay(proj session.Project, session session.Session)
+	RewritePackage(proj session.Project, pkg inspect.Pkg, session session.Session)
+	RewriteFile(proj session.Project, f inspect.FileContext, session session.Session)
 
-	Finish(proj Project, err error, result *RewriteResult)
+	Finish(proj session.Project, err error, result *RewriteResult)
 }
 type RewriteCallback struct {
-	BeforeLoad     func(proj Project, session inspect.Session)
-	InitSession    func(proj Project, session inspect.Session)
-	AfterLoad      func(proj Project, session inspect.Session)
-	GenOverlay     func(proj Project, session inspect.Session)
-	RewritePackage func(proj Project, pkg inspect.Pkg, session inspect.Session)
-	RewriteFile    func(proj Project, f inspect.FileContext, session inspect.Session)
-	Finish         func(proj Project, err error, result *RewriteResult)
+	BeforeLoad     func(proj session.Project, session session.Session)
+	InitSession    func(proj session.Project, session session.Session)
+	AfterLoad      func(proj session.Project, session session.Session)
+	GenOverlay     func(proj session.Project, session session.Session)
+	RewritePackage func(proj session.Project, pkg inspect.Pkg, session session.Session)
+	RewriteFile    func(proj session.Project, f inspect.FileContext, session session.Session)
+	Finish         func(proj session.Project, err error, result *RewriteResult)
 }
 
-// LoadOptions are options that only
-// related to load info that cannot be changed
-// This is to make the build process reproducible,
-// and is visible to user
-type LoadOptions interface {
-	Verbose() bool
-
-	// GoFlags are common to load and build
-	GoFlags() []string
-
-	// BuildFlags only apply to build
-	BuildFlags() []string
-}
-
-type Options = inspect.Options
+type Options = session.Options
 
 type loadOptions struct {
 	verbose bool
@@ -48,7 +35,7 @@ type loadOptions struct {
 	buildFlags []string // passed to go build
 }
 
-var _ LoadOptions = (*loadOptions)(nil)
+var _ session.LoadOptions = (*loadOptions)(nil)
 
 // BuildFlags implements LoadOptions.
 func (c *loadOptions) BuildFlags() []string {
@@ -137,45 +124,45 @@ func NewDefaultRewriter(callback *RewriteCallback) Rewriter {
 }
 
 // Init implements Rewriter
-func (c *defaultRewriter) BeforeLoad(proj Project, session inspect.Session) {
+func (c *defaultRewriter) BeforeLoad(proj session.Project, session session.Session) {
 	if c.RewriteCallback.BeforeLoad != nil {
 		c.RewriteCallback.BeforeLoad(proj, session)
 	}
 }
 
-func (c *defaultRewriter) InitSession(proj Project, session inspect.Session) {
+func (c *defaultRewriter) InitSession(proj session.Project, session session.Session) {
 	if c.RewriteCallback.InitSession != nil {
 		c.RewriteCallback.InitSession(proj, session)
 	}
 }
-func (c *defaultRewriter) AfterLoad(proj Project, session inspect.Session) {
+func (c *defaultRewriter) AfterLoad(proj session.Project, session session.Session) {
 	if c.RewriteCallback.AfterLoad != nil {
 		c.RewriteCallback.AfterLoad(proj, session)
 	}
 }
 
 // GenOverlay implements Rewriter
-func (c *defaultRewriter) GenOverlay(proj Project, session inspect.Session) {
+func (c *defaultRewriter) GenOverlay(proj session.Project, session session.Session) {
 	if c.RewriteCallback.GenOverlay != nil {
 		c.RewriteCallback.GenOverlay(proj, session)
 	}
 }
 
 // RewriteFile implements Rewriter
-func (c *defaultRewriter) RewriteFile(proj Project, f inspect.FileContext, session inspect.Session) {
+func (c *defaultRewriter) RewriteFile(proj session.Project, f inspect.FileContext, session session.Session) {
 	if c.RewriteCallback.RewriteFile != nil {
 		c.RewriteCallback.RewriteFile(proj, f, session)
 	}
 }
 
 // RewritePackage implements Rewriter
-func (c *defaultRewriter) RewritePackage(proj Project, pkg inspect.Pkg, session inspect.Session) {
+func (c *defaultRewriter) RewritePackage(proj session.Project, pkg inspect.Pkg, session session.Session) {
 	if c.RewriteCallback.RewritePackage != nil {
 		c.RewriteCallback.RewritePackage(proj, pkg, session)
 	}
 }
 
-func (c *defaultRewriter) Finish(proj Project, err error, result *RewriteResult) {
+func (c *defaultRewriter) Finish(proj session.Project, err error, result *RewriteResult) {
 	if c.RewriteCallback.Finish != nil {
 		c.RewriteCallback.Finish(proj, err, result)
 	}

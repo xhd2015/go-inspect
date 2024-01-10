@@ -7,13 +7,14 @@ import (
 
 	"github.com/xhd2015/go-inspect/inspect"
 	"github.com/xhd2015/go-inspect/project"
+	"github.com/xhd2015/go-inspect/rewrite/session"
 	"github.com/xhd2015/go-vendor-pack/unpack"
 )
 
 //go:generate bash -ec "cd gen_pack && bash gen.sh"
 
 func Use() {
-	project.OnProjectRewrite(func(proj project.Project) project.Rewriter {
+	project.OnProjectRewrite(func(proj session.Project) project.Rewriter {
 		return NewRewritter()
 	})
 }
@@ -31,12 +32,12 @@ func NewRewritter() project.Rewriter {
 }
 
 // BeforeLoad implements project.Rewriter
-func (c *rewritter) BeforeLoad(proj project.Project, session inspect.Session) {
+func (c *rewritter) BeforeLoad(proj session.Project, session session.Session) {
 	session.Options().SetRewriteStd(true)
 }
 
 // GenOverlay implements project.Rewriter
-func (c *rewritter) GenOverlay(proj project.Project, session inspect.Session) {
+func (c *rewritter) GenOverlay(proj session.Project, session session.Session) {
 	g := proj.Global()
 
 	// unpack getg
@@ -87,7 +88,7 @@ func init(){
 	removeGetgErrMsg(proj, session)
 }
 
-func removeGetgErrMsg(proj project.Project, session inspect.Session) {
+func removeGetgErrMsg(proj session.Project, session session.Session) {
 	g := proj.Global()
 
 	pkg := g.GetPkg("github.com/xhd2015/go-inspect/plugin/getg")
@@ -105,7 +106,7 @@ func removeGetgErrMsg(proj project.Project, session inspect.Session) {
 	})
 }
 
-func unpackGetg(proj project.Project) {
+func unpackGetg(proj session.Project) {
 	err := unpack.UnpackFromBase64Decode(GETG_PACK, proj.RewriteProjectRoot(), &unpack.Options{
 		ForceUpgradeModules: map[string]bool{
 			"github.com/xhd2015/go-inspect/plugin/getg": true,

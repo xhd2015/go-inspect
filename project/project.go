@@ -9,56 +9,8 @@ import (
 	"github.com/xhd2015/go-inspect/inspect"
 	"github.com/xhd2015/go-inspect/inspect/util"
 	"github.com/xhd2015/go-inspect/rewrite"
+	"github.com/xhd2015/go-inspect/rewrite/session"
 )
-
-type Project interface {
-	Global() inspect.Global
-	MainPkg() inspect.Pkg
-
-	// Options return the options to be
-	// used, guranteed to be not nil
-	Options() LoadOptions
-	Args() []string
-
-	// AllocExtraPkg under main
-	AllocExtraPkg(name string) (pkgName string)
-
-	// AllocExtraFile under main
-	AllocExtraFile(name string, suffix string) (fileName string)
-
-	// AllocExtraFile under main
-	AllocExtraPkgAt(dir string, name string) (fileName string)
-	AllocExtraFileaAt(dir string, name string, suffix string) (fileName string)
-
-	// file creation
-	// NewFile create a file in rewritten root
-	// without tracking any file
-	NewFile(filePath string, content string)
-	// ModifyFile modifes a file in rewritten root
-	// with tracking
-	ModifyFile(filePath string, content string)
-	// ReplaceFile modifies the original source
-	ReplaceFile(filePath string, content string)
-
-	// DeriveFileFrom create a file with tracking
-	DeriveFileFrom(filePath string, srcPath string, content string)
-
-	ProjectRoot() string
-	RewriteRoot() string
-	RewriteProjectRoot() string
-
-	IsVendor() bool
-
-	// static tool
-	HasImportPkg(f *ast.File, pkgNameQuoted string) bool
-	ShortHash(s string) string
-	ShortHashFile(f inspect.FileContext) string
-
-	// Deprecated use session.Data() instead
-	// SetData makes project serve as a context
-	SetData(key interface{}, value interface{})
-	GetData(key interface{}) (value interface{}, ok bool)
-}
 
 type sessionDirs struct {
 	projectRoot string
@@ -83,7 +35,7 @@ func (c *sessionDirs) RewriteProjectVendorRoot() string {
 	return c.rewriteProjectVendorRoot
 }
 
-var _ Project = ((*project)(nil))
+var _ session.Project = ((*project)(nil))
 
 type project struct {
 	g           inspect.Global
@@ -117,7 +69,7 @@ func (c *project) AllocExtraPkgAt(dir string, name string) (fileName string) {
 }
 
 // Options implements Project
-func (c *project) Options() LoadOptions {
+func (c *project) Options() session.LoadOptions {
 	return c.opts
 }
 func (c *project) Args() []string {

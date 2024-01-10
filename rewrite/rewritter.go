@@ -1,8 +1,11 @@
-package inspect
+package rewrite
 
 import (
 	"fmt"
 	"go/ast"
+
+	"github.com/xhd2015/go-inspect/inspect"
+	"github.com/xhd2015/go-inspect/rewrite/session"
 )
 
 // Visitor represents a session-associated rewrite
@@ -13,21 +16,21 @@ type Visitor interface {
 	// any Pakcage, making it holds a list of ast files.
 	// So we start by packages, not by file.
 	// You can type check n against *ast.Package, *ast.File, ...
-	Visit(n ast.Node, session Session) bool
-	VisitEnd(n ast.Node, session Session)
+	Visit(n ast.Node, session session.Session) bool
+	VisitEnd(n ast.Node, session session.Session)
 }
 
 type Visitors struct {
 	// VisitFn is pre action applied, returns true or false
 	// to indicate whether walking its children.
-	VisitFn    func(n ast.Node, session Session) bool
-	VisitEndFn func(n ast.Node, session Session)
+	VisitFn    func(n ast.Node, session session.Session) bool
+	VisitEndFn func(n ast.Node, session session.Session)
 }
 
 var _ Visitor = ((*Visitors)(nil))
 
 // Visit implements Visitor
-func (c *Visitors) Visit(n ast.Node, session Session) bool {
+func (c *Visitors) Visit(n ast.Node, session session.Session) bool {
 	if c.VisitFn == nil {
 		return true
 	}
@@ -35,7 +38,7 @@ func (c *Visitors) Visit(n ast.Node, session Session) bool {
 }
 
 // VisitEnd implements Visitor
-func (c *Visitors) VisitEnd(n ast.Node, session Session) {
+func (c *Visitors) VisitEnd(n ast.Node, session session.Session) {
 	if c.VisitEndFn == nil {
 		return
 	}
@@ -44,31 +47,31 @@ func (c *Visitors) VisitEnd(n ast.Node, session Session) {
 
 // Rewritter represents a package level rewritter
 type Rewritter interface {
-	PackageRewritter(pkg Pkg, session Session) bool
-	PackageRewritterEnd(pkg Pkg, session Session)
-	FileRewritter(f FileContext, session Session) bool
-	FileRewritterEnd(f FileContext, session Session)
+	PackageRewritter(pkg inspect.Pkg, session session.Session) bool
+	PackageRewritterEnd(pkg inspect.Pkg, session session.Session)
+	FileRewritter(f inspect.FileContext, session session.Session) bool
+	FileRewritterEnd(f inspect.FileContext, session session.Session)
 
-	FuncRewritter(fn FuncContext, session Session)
-	FuncRewritterEnd(fn FuncContext, session Session)
+	FuncRewritter(fn inspect.FuncContext, session session.Session)
+	FuncRewritterEnd(fn inspect.FuncContext, session session.Session)
 }
 
 type Rewriters struct {
 	// top level function declare
-	PackageFn    func(pkg Pkg, session Session) bool
-	PackageEndFn func(pkg Pkg, session Session)
+	PackageFn    func(pkg inspect.Pkg, session session.Session) bool
+	PackageEndFn func(pkg inspect.Pkg, session session.Session)
 
-	FileFn    func(f FileContext, session Session) bool
-	FileEndFn func(f FileContext, session Session)
+	FileFn    func(f inspect.FileContext, session session.Session) bool
+	FileEndFn func(f inspect.FileContext, session session.Session)
 
-	FuncFn    func(fn FuncContext, session Session) bool
-	FuncEndFn func(fn FuncContext, session Session)
+	FuncFn    func(fn inspect.FuncContext, session session.Session) bool
+	FuncEndFn func(fn inspect.FuncContext, session session.Session)
 }
 
 var _ Rewritter = ((*Rewriters)(nil))
 
 // PackageRewritter implements RW
-func (c *Rewriters) PackageRewritter(pkg Pkg, session Session) bool {
+func (c *Rewriters) PackageRewritter(pkg inspect.Pkg, session session.Session) bool {
 	if c.PackageFn == nil {
 		return true
 	}
@@ -76,7 +79,7 @@ func (c *Rewriters) PackageRewritter(pkg Pkg, session Session) bool {
 }
 
 // PackageRewritterEnd implements RW
-func (c *Rewriters) PackageRewritterEnd(pkg Pkg, session Session) {
+func (c *Rewriters) PackageRewritterEnd(pkg inspect.Pkg, session session.Session) {
 	if c.PackageEndFn == nil {
 		return
 	}
@@ -84,7 +87,7 @@ func (c *Rewriters) PackageRewritterEnd(pkg Pkg, session Session) {
 }
 
 // FileRewritter implements RW
-func (c *Rewriters) FileRewritter(f FileContext, session Session) bool {
+func (c *Rewriters) FileRewritter(f inspect.FileContext, session session.Session) bool {
 	if c.FileFn == nil {
 		return true
 	}
@@ -92,7 +95,7 @@ func (c *Rewriters) FileRewritter(f FileContext, session Session) bool {
 }
 
 // FileRewritterEnd implements RW
-func (c *Rewriters) FileRewritterEnd(f FileContext, session Session) {
+func (c *Rewriters) FileRewritterEnd(f inspect.FileContext, session session.Session) {
 	if c.FileEndFn == nil {
 		return
 	}
@@ -100,7 +103,7 @@ func (c *Rewriters) FileRewritterEnd(f FileContext, session Session) {
 }
 
 // FuncRewritter implements RW
-func (c *Rewriters) FuncRewritter(fn FuncContext, session Session) {
+func (c *Rewriters) FuncRewritter(fn inspect.FuncContext, session session.Session) {
 	if c.FuncFn == nil {
 		return
 	}
@@ -108,7 +111,7 @@ func (c *Rewriters) FuncRewritter(fn FuncContext, session Session) {
 }
 
 // FuncRewritterEnd implements RW
-func (c *Rewriters) FuncRewritterEnd(fn FuncContext, session Session) {
+func (c *Rewriters) FuncRewritterEnd(fn inspect.FuncContext, session session.Session) {
 	if c.FuncEndFn == nil {
 		return
 	}
@@ -117,7 +120,7 @@ func (c *Rewriters) FuncRewritterEnd(fn FuncContext, session Session) {
 
 type stackVisitor struct {
 	v       Visitor
-	session Session
+	session session.Session
 
 	// root is package, then file
 	stack []ast.Node
@@ -139,13 +142,13 @@ func (c *stackVisitor) Visit(node ast.Node) (w ast.Visitor) {
 	return c
 }
 
-func VisitAll(pkgs func(func(pkg Pkg) bool), session Session, visitor Visitor) {
+func VisitAll(pkgs func(func(pkg inspect.Pkg) bool), session session.Session, visitor Visitor) {
 	st := &stackVisitor{
 		v:       visitor,
 		session: session,
 	}
 	// traverse all packages
-	pkgs(func(p Pkg) bool {
+	pkgs(func(p inspect.Pkg) bool {
 		ast.Walk(st, p.ASTNode())
 		if len(st.stack) != 0 {
 			panic(fmt.Errorf("internal error, expect empty stack,actual:%d", len(st.stack)))

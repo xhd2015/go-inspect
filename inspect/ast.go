@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/hcl/hcl/strconv"
 
 	"github.com/xhd2015/go-inspect/inspect/util"
+	"github.com/xhd2015/go-inspect/rewrite/edit"
 )
 
 // Node defines basic abstraction
@@ -26,7 +27,7 @@ type FileContext interface {
 	Pkg() Pkg
 	AbsPath() string // abs path of the file
 
-	EditImports(edit Edit) ImportListContext
+	EditImports(edit edit.Edit) ImportListContext
 
 	AST() *ast.File
 	ASTNode() ast.Node
@@ -88,7 +89,7 @@ type FieldVar interface {
 
 	// Rename change name in edit Session
 	// names must not be empty
-	Rename(name string, edit Edit)
+	Rename(name string, edit edit.Edit)
 }
 
 type FieldListContext interface {
@@ -206,7 +207,7 @@ func (c *file) FirstPos() token.Pos {
 }
 
 // EditImports implements FileContext
-func (c *file) EditImports(edit Edit) ImportListContext {
+func (c *file) EditImports(edit edit.Edit) ImportListContext {
 	first := true
 	insertPos := c.ast.Name.End()
 	addImport := func(use, pkg string) {
@@ -503,7 +504,7 @@ func (c fieldVar) TypeExpr() Expr {
 }
 
 // Rename implements FieldVar
-func (c fieldVar) Rename(name string, edit Edit) {
+func (c fieldVar) Rename(name string, edit edit.Edit) {
 	if name == "" {
 		panic(fmt.Errorf("empty name at %d", c.idx))
 	}

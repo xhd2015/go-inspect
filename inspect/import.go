@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/xhd2015/go-inspect/inspect/util"
+	"github.com/xhd2015/go-inspect/rewrite/edit"
 )
 
 // TODO: handle "." case
@@ -24,7 +25,7 @@ type ImportListContext interface {
 type pkgPath = string
 type pkgName = string
 type importList struct {
-	edit      Edit
+	edit      edit.Edit
 	pkgToName map[pkgPath]pkgName         // this provides the default name of the package. It must be unique.
 	importMap map[pkgPath]map[string]bool // pkgPath to their alias
 	useMap    map[string]pkgPath          // all uses

@@ -6,7 +6,6 @@ import (
 	"path"
 	"strings"
 
-	"github.com/xhd2015/go-inspect/inspect"
 	"github.com/xhd2015/go-inspect/inspect/util"
 	"github.com/xhd2015/go-inspect/sh"
 )
@@ -15,7 +14,7 @@ func Build(args []string, opts *BuildOptions) (result *BuildResult, err error) {
 	return build(args, opts)
 }
 
-func BuildRewrite(args []string, ctrl Controller, rewritter inspect.Visitor, opts *BuildRewriteOptions) (*BuildResult, error) {
+func BuildRewrite(args []string, ctrl Controller, rewritter Visitor, opts *BuildRewriteOptions) (*BuildResult, error) {
 	return buildRewrite(args, ctrl, rewritter, opts)
 }
 
@@ -23,7 +22,7 @@ type BuildResult struct {
 	Output string
 }
 
-func buildRewrite(args []string, ctrl Controller, rewritter inspect.Visitor, opts *BuildRewriteOptions) (*BuildResult, error) {
+func buildRewrite(args []string, ctrl Controller, rewritter Visitor, opts *BuildRewriteOptions) (*BuildResult, error) {
 	if opts == nil {
 		opts = &BuildRewriteOptions{}
 	}

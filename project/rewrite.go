@@ -9,8 +9,12 @@ import (
 	"github.com/xhd2015/go-inspect/inspect"
 	"github.com/xhd2015/go-inspect/inspect/util"
 	"github.com/xhd2015/go-inspect/rewrite"
+	"github.com/xhd2015/go-inspect/rewrite/session"
+	"github.com/xhd2015/go-inspect/rewrite/session/session_impl"
+	"github.com/xhd2015/go-inspect/rewrite/source_import"
 )
 
+type EditCallbackFn = session.EditCallbackFn
 type BuildOpts = rewrite.BuildOpts
 type RewriteOpts = rewrite.RewriteOpts
 
@@ -23,7 +27,7 @@ func Rewrite(loadArgs []string, opts *RewriteOpts) *RewriteResult {
 	return doRewrite(loadArgs, &RewriteCallbackOpts{
 		RewriteOpts: opts,
 		RewriteCallback: &RewriteCallback{
-			BeforeLoad: func(proj Project, session inspect.Session) {
+			BeforeLoad: func(proj session.Project, session session.Session) {
 				for _, f := range projectListeners {
 					callback := f(proj)
 					if callback != nil {
@@ -37,7 +41,7 @@ func Rewrite(loadArgs []string, opts *RewriteOpts) *RewriteResult {
 					callback.BeforeLoad(proj, session)
 				}
 			},
-			InitSession: func(proj Project, session inspect.Session) {
+			InitSession: func(proj session.Project, session session.Session) {
 				for _, f := range initSesssionListeners {
 					f(proj, session)
 				}
@@ -45,7 +49,7 @@ func Rewrite(loadArgs []string, opts *RewriteOpts) *RewriteResult {
 					callback.InitSession(proj, session)
 				}
 			},
-			AfterLoad: func(proj Project, session inspect.Session) {
+			AfterLoad: func(proj session.Project, session session.Session) {
 				for _, f := range afterLoadListeners {
 					f(proj, session)
 				}
@@ -53,7 +57,7 @@ func Rewrite(loadArgs []string, opts *RewriteOpts) *RewriteResult {
 					callback.AfterLoad(proj, session)
 				}
 			},
-			GenOverlay: func(proj Project, session inspect.Session) {
+			GenOverlay: func(proj session.Project, session session.Session) {
 				for _, f := range genOverlayListeners {
 					f(proj, session)
 				}
@@ -61,7 +65,7 @@ func Rewrite(loadArgs []string, opts *RewriteOpts) *RewriteResult {
 					callback.GenOverlay(proj, session)
 				}
 			},
-			RewritePackage: func(proj Project, pkg inspect.Pkg, session inspect.Session) {
+			RewritePackage: func(proj session.Project, pkg inspect.Pkg, session session.Session) {
 				for _, f := range rewritePackageListeners {
 					f(proj, pkg, session)
 				}
@@ -69,7 +73,7 @@ func Rewrite(loadArgs []string, opts *RewriteOpts) *RewriteResult {
 					callback.RewritePackage(proj, pkg, session)
 				}
 			},
-			RewriteFile: func(proj Project, file inspect.FileContext, session inspect.Session) {
+			RewriteFile: func(proj session.Project, file inspect.FileContext, session session.Session) {
 				for _, f := range rewriteFileListeners {
 					f(proj, file, session)
 				}
@@ -77,7 +81,7 @@ func Rewrite(loadArgs []string, opts *RewriteOpts) *RewriteResult {
 					callback.RewriteFile(proj, file, session)
 				}
 			},
-			Finish: func(proj Project, err error, result *RewriteResult) {
+			Finish: func(proj session.Project, err error, result *RewriteResult) {
 				for _, f := range finishListeners {
 					f(proj, err, result)
 				}
@@ -161,8 +165,8 @@ func doRewriteNoCheckPanic(loadArgs []string, opts *RewriteCallbackOpts) (proj *
 	genMap := make(map[string]*rewrite.Content)
 
 	ctrl := &rewrite.ControllerFuncs{
-		BeforeLoadFn: func(rwOpts *rewrite.BuildRewriteOptions, session inspect.Session) {
-			inspect.OnSessionOpts(session, &options{
+		BeforeLoadFn: func(rwOpts *rewrite.BuildRewriteOptions, session session.Session) {
+			session_impl.OnSessionOpts(session, &options{
 				opts:           opts.RewriteOpts,
 				underlyingOpts: rwOpts,
 			})
@@ -172,7 +176,7 @@ func doRewriteNoCheckPanic(loadArgs []string, opts *RewriteCallbackOpts) (proj *
 				rewriteProjectRoot:       projectRewriteRoot,
 				rewriteProjectVendorRoot: rewriteProjectVendorRoot,
 			}
-			inspect.OnSessionDirs(session, dirs)
+			session_impl.OnSessionDirs(session, dirs)
 
 			proj = &project{
 				opts: &loadOptions{
@@ -188,9 +192,10 @@ func doRewriteNoCheckPanic(loadArgs []string, opts *RewriteCallbackOpts) (proj *
 				vendor:             hasVendorDir(projectAbsDir),
 				ctxData:            make(map[interface{}]interface{}),
 			}
+			session_impl.OnSessionProject(session, proj)
 			opts.BeforeLoad(proj, session)
 		},
-		InitSessionFn: func(g inspect.Global, session inspect.Session) {
+		InitSessionFn: func(g inspect.Global, session session.Session) {
 			proj.g = g
 			// find the first package, define that as main
 			// packages
@@ -202,12 +207,12 @@ func doRewriteNoCheckPanic(loadArgs []string, opts *RewriteCallbackOpts) (proj *
 
 			opts.InitSession(proj, session)
 		},
-		AfterLoadFn: func(g inspect.Global, session inspect.Session) {
+		AfterLoadFn: func(g inspect.Global, session session.Session) {
 			opts.AfterLoad(proj, session)
 		},
 		// TODO: add a explicit init function
 		// called first
-		FilterPkgsFn: func(g inspect.Global, session inspect.Session) func(func(p inspect.Pkg, pkgFlag rewrite.PkgFlag) bool) {
+		FilterPkgsFn: func(g inspect.Global, session session.Session) func(func(p inspect.Pkg, pkgFlag rewrite.PkgFlag) bool) {
 			pkgFilter := session.Options().GetPackageFilter()
 			mod := g.LoadInfo().MainModule()
 			return func(f func(p inspect.Pkg, pkgFlag rewrite.PkgFlag) bool) {
@@ -229,10 +234,13 @@ func doRewriteNoCheckPanic(loadArgs []string, opts *RewriteCallbackOpts) (proj *
 				})
 			}
 		},
-		GenOverlayFn: func(g inspect.Global, session inspect.Session) map[string]*rewrite.Content {
+		GenOverlayFn: func(g inspect.Global, session session.Session) map[string]*rewrite.Content {
 			if opts.GenOverlay != nil {
 				opts.GenOverlay(proj, session)
 			}
+
+			// source import
+			source_import.OnSessionGenOverlay(session)
 
 			// template code
 			for file, code := range opts.PreCode {
@@ -241,7 +249,7 @@ func doRewriteNoCheckPanic(loadArgs []string, opts *RewriteCallbackOpts) (proj *
 				}
 			}
 
-			session.Gen(&inspect.EditCallbackFn{
+			session.Gen(&EditCallbackFn{
 				Rewrites: func(f inspect.FileContext, content string) bool {
 					newPath := rewrite.CleanGoFsPath(path.Join(rewriteRoot, f.AbsPath()))
 					genMap[newPath] = &rewrite.Content{
@@ -261,10 +269,10 @@ func doRewriteNoCheckPanic(loadArgs []string, opts *RewriteCallbackOpts) (proj *
 			return genMap
 		},
 	}
-	vis := &inspect.Visitors{
+	vis := &rewrite.Visitors{
 		// the granliarity is at package and file level
 		// detailed nodes are not touched
-		VisitFn: func(n ast.Node, session inspect.Session) bool {
+		VisitFn: func(n ast.Node, session session.Session) bool {
 			if opts.RewritePackage != nil {
 				if pkg, ok := n.(*ast.Package); ok {
 					p := session.Global().Registry().Pkg(pkg)

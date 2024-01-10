@@ -1,4 +1,6 @@
-package inspect
+package session
+
+import "github.com/xhd2015/go-inspect/inspect"
 
 type Options interface {
 	Force() bool
@@ -6,9 +8,9 @@ type Options interface {
 
 	Verbose() bool
 
-	GetPackageFilter() func(pkg Pkg) bool
-	SetPackageFiler(filter func(pkg Pkg) bool)
-	AddPackageFilter(filter func(pkg Pkg) bool)
+	GetPackageFilter() func(pkg inspect.Pkg) bool
+	SetPackageFiler(filter func(pkg inspect.Pkg) bool)
+	AddPackageFilter(filter func(pkg inspect.Pkg) bool)
 
 	RewriteStd() bool
 	SetRewriteStd(rewriteStd bool)
