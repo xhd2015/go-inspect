@@ -2,7 +2,9 @@ package session_impl
 
 import (
 	"fmt"
+	"path"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/xhd2015/go-inspect/inspect"
@@ -10,6 +12,7 @@ import (
 	source_import_internal "github.com/xhd2015/go-inspect/rewrite/internal/source_import"
 	sessionpkg "github.com/xhd2015/go-inspect/rewrite/session"
 	"github.com/xhd2015/go-inspect/rewrite/source_import"
+	"github.com/xhd2015/go-vendor-pack/writefs/memfs"
 )
 
 type session struct {
@@ -17,7 +20,8 @@ type session struct {
 	project sessionpkg.Project
 	data    *sessionData
 
-	dirs sessionpkg.SessionDirs
+	dirs      sessionpkg.SessionDirs
+	rewriteFS *memfs.MemFS
 
 	opts sessionpkg.Options
 
@@ -35,6 +39,7 @@ func NewSession(g inspect.Global, opts sessionpkg.Options) sessionpkg.Session {
 		g:                             g,
 		data:                          &sessionData{},
 		opts:                          opts,
+		rewriteFS:                     memfs.New(),
 		SourceImportRegistryRetriever: source_import.NewRegistry(),
 	}
 }
@@ -118,6 +123,10 @@ func (c *session) Dirs() sessionpkg.SessionDirs {
 	return c.dirs
 }
 
+func (c *session) RewriteFS() *memfs.MemFS {
+	return c.rewriteFS
+}
+
 // FileEdit implements Session
 func (c *session) FileEdit(f inspect.FileContext) sessionpkg.GoRewriteEdit {
 	absPath := f.AbsPath()
@@ -184,4 +193,39 @@ func (c *session) Gen(callback sessionpkg.EditCallback) {
 	if !loop {
 		return
 	}
+}
+
+func (c *session) SetRewriteFile(filePath string, content string) error {
+	p := CleanGoFsPath(path.Join(c.dirs.RewriteRoot(), filePath))
+	return c.setFile(p, content)
+}
+
+func (c *session) ReplaceFile(filePath string, content string) error {
+	p := CleanGoFsPath(path.Join(c.dirs.ProjectRoot(), filePath))
+	return c.setFile(p, content)
+}
+
+func (c *session) setFile(filePath string, content string) error {
+	err := c.rewriteFS.MkdirAll(filepath.Dir(filePath), 0755)
+	if err != nil {
+		return err
+	}
+	w, err := c.rewriteFS.OpenFileWrite(filePath)
+	if err != nil {
+		return err
+	}
+	defer w.Close()
+	_, err = w.Write([]byte(content))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// go's replace cannot have '@' character, so we replace it with ver_
+// this is used for files to be copied into tmp dir, and will appear on replace verb.
+func CleanGoFsPath(s string) string {
+	// example:
+	// /Users/xhd2015/Projects/gopath/pkg/mod/google.golang.org/grpc@v1.47.0/xds
+	return strings.ReplaceAll(s, "@", "/")
 }

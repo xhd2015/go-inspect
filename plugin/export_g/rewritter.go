@@ -5,9 +5,9 @@ import (
 	"path"
 	"path/filepath"
 
-	"github.com/xhd2015/go-inspect/inspect"
 	"github.com/xhd2015/go-inspect/project"
 	"github.com/xhd2015/go-inspect/rewrite/session"
+	"github.com/xhd2015/go-vendor-pack/writefs"
 )
 
 //go:generate bash -ec "cd gen_pack && bash gen.sh"
@@ -38,7 +38,10 @@ func (c *rewritter) BeforeLoad(proj session.Project, session session.Session) {
 // BeforeLoad implements project.Rewriter
 func (c *rewritter) AfterLoad(proj session.Project, session session.Session) {
 	// unpack getg
-	importGet(session)
+	err := session.ImportPackedModulesBase64(GETG_PACK)
+	if err != nil {
+		panic(fmt.Errorf("import getg: %w", err))
+	}
 }
 
 // GenOverlay implements project.Rewriter
@@ -67,7 +70,7 @@ func (c *rewritter) GenOverlay(proj session.Project, session session.Session) {
 
 	// add an extra package with name 0 to make it import earlier than others
 	pkgDir := proj.AllocExtraPkg("0_000_init_getg")
-	proj.NewFile(path.Join(pkgDir, "export_g_runtime_impl.go"), `package init_getg
+	session.SetRewriteFile(path.Join(pkgDir, "export_g_runtime_impl.go"), `package init_getg
 
 import (
 	"runtime"
@@ -91,26 +94,22 @@ func init(){
 }
 
 func removeGetgErrMsg(proj session.Project, session session.Session) {
-	g := proj.Global()
-
-	pkg := g.GetPkg("github.com/xhd2015/go-inspect/plugin/getg")
-	if pkg == nil {
-		return
+	var errMsgFileBase string
+	if proj.IsVendor() {
+		errMsgFileBase = filepath.Join(session.Dirs().RewriteProjectRoot(), "vendor")
+	} else {
+		errMsgFileBase = session.Dirs().RewriteProjectVendorRoot()
 	}
-	pkg.RangeFiles(func(i int, f inspect.FileContext) bool {
-		baseName := filepath.Base(f.AbsPath())
-		if baseName == "err_msg.go" {
-			ast := f.AST()
-			session.FileRewrite(f).Replace(ast.Pos(), ast.End(), "package "+ast.Name.Name)
-			return false
+	errMsgFile := filepath.Join(errMsgFileBase, "github.com/xhd2015/go-inspect/plugin/getg/err_msg.go")
+	_, statErr := session.RewriteFS().Stat(errMsgFile)
+	if statErr != nil {
+		if writefs.IsNotExist(statErr) {
+			return
 		}
-		return true
-	})
-}
-
-func importGet(sess session.Session) {
-	err := sess.ImportPackedModulesBase64(GETG_PACK)
+		panic(fmt.Errorf("stat getg err_msg file: %w", statErr))
+	}
+	err := writefs.WriteFile(session.RewriteFS(), errMsgFile, []byte("package getg"))
 	if err != nil {
-		panic(fmt.Errorf("import getg: %w", err))
+		panic(err)
 	}
 }

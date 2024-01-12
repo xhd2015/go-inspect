@@ -10,16 +10,21 @@ import (
 	"github.com/xhd2015/go-objpath"
 
 	"github.com/xhd2015/go-inspect/inspect"
+	"github.com/xhd2015/go-inspect/rewrite/session"
 )
 
 // go test -run TestRewriteSimple -v ./rewrite
 func TestRewriteSimple(t *testing.T) {
+}
+
+// go test -run TestRewriteCustomCallback -v ./rewrite
+func TestRewriteCustomCallback(t *testing.T) {
 	rewriteRoot := GetTmpRewriteRoot(t.Name())
 	genMap := make(map[string]*Content)
 
 	ctrl := &ControllerFuncs{
-		GenOverlayFn: func(g inspect.Global, session inspect.Session) map[string]*Content {
-			session.Gen(&inspect.EditCallbackFn{
+		GenOverlayFn: func(g inspect.Global, sess session.Session) map[string]*Content {
+			sess.Gen(&session.EditCallbackFn{
 				Rewrites: func(f inspect.FileContext, content string) bool {
 					newPath := CleanGoFsPath(path.Join(rewriteRoot, f.AbsPath()))
 					genMap[newPath] = &Content{
@@ -32,8 +37,8 @@ func TestRewriteSimple(t *testing.T) {
 			return genMap
 		},
 	}
-	vis := &inspect.Visitors{
-		VisitFn: func(n ast.Node, session inspect.Session) bool {
+	vis := &Visitors{
+		VisitFn: func(n ast.Node, session session.Session) bool {
 			if file, ok := n.(*ast.File); ok {
 				f := session.Global().Registry().File(file)
 				edit := session.FileRewrite(f)

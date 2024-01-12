@@ -1,10 +1,11 @@
 package filecopy
 
+// TODO: make channel optional
+
 import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
 	"regexp"
@@ -12,6 +13,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/xhd2015/go-vendor-pack/writefs"
 )
 
 // sync model:
@@ -31,6 +34,8 @@ type SyncRebaseOptions struct {
 	ProcessDestPath func(s string) string
 
 	DidCopy func(srcPath string, destPath string)
+
+	FS writefs.FS
 }
 
 func SyncRebase(initPaths []string, rebaseDir string, opts SyncRebaseOptions) error {
@@ -75,29 +80,38 @@ func Sync(initPaths []string, sourcer SyncSourcer, opts SyncRebaseOptions) error
 	}, sourcer, opts)
 }
 
+// primary bottleneck: read FS, can be made
+// async
 func doSync(ranger func(fn func(path string)), sourcer SyncSourcer, opts SyncRebaseOptions) error {
+	var fsHandle writefs.FS = writefs.SysFS{}
+	// var fsHandle FS = NoopFS{}
+	// var fsHandle FS = &mapFS
+
+	if opts.FS != nil {
+		fsHandle = opts.FS
+	}
+
 	shouldIgnore := newRegexMatcher(opts.Ignores)
 	readDestDir := func(dest string) (destFiles []os.FileInfo, destDirMade bool, err error) {
-		destFiles, err = ioutil.ReadDir(dest)
-		if err == nil {
+		destFiles, readErr := fsHandle.ReadDir(dest)
+		if readErr == nil {
 			destDirMade = true
 			return
 		}
-		if errors.Is(err, os.ErrNotExist) {
-			destDirMade = false
-			err = nil
+		if writefs.IsNotExist(readErr) {
 			return
 		}
+		err = readErr
 		// rare case: is a file
-		fs, fsErr := os.Stat(dest)
+		fs, fsErr := fsHandle.Stat(dest)
 		if fsErr == nil && !fs.IsDir() {
 			// TODO: add an option to indicate overwrite
-			err = nil
-			rmErr := os.RemoveAll(dest)
+			rmErr := fsHandle.RemoveFile(dest)
 			if rmErr != nil {
-				err = fmt.Errorf("remove existing dest file error:%v", rmErr)
+				err = fmt.Errorf("remove existing dest file error:%w", rmErr)
 				return
 			}
+			err = nil
 		}
 		// may have err
 		return
@@ -137,7 +151,8 @@ func doSync(ranger func(fn func(path string)), sourcer SyncSourcer, opts SyncReb
 	var waitGroup sync.WaitGroup
 
 	const chSize = 1000
-	const gNum = 100 // 400M memory at most
+	// const gNum = 100 // 400M memory at most
+	const gNum = 101 // 400M memory at most
 
 	var mutext sync.Mutex
 	var panicErr interface{}
@@ -189,11 +204,11 @@ func doSync(ranger func(fn func(path string)), sourcer SyncSourcer, opts SyncReb
 					atomic.AddInt64(&totalFiles, 1)
 					onUpdateStats()
 
-					destFile, err := os.Stat(destPath)
+					destFile, err := fsHandle.Stat(destPath)
 					needCopy := false
 					needDelDest := false
 					if err != nil {
-						if !errors.Is(err, os.ErrNotExist) {
+						if !writefs.IsNotExist(err) {
 							return err
 						}
 						needCopy = true
@@ -207,7 +222,7 @@ func doSync(ranger func(fn func(path string)), sourcer SyncSourcer, opts SyncReb
 						return nil
 					}
 					if needDelDest {
-						err = os.RemoveAll(destPath)
+						err = fsHandle.RemoveAll(destPath)
 						if err != nil {
 							return err
 						}
@@ -218,7 +233,7 @@ func doSync(ranger func(fn func(path string)), sourcer SyncSourcer, opts SyncReb
 
 					// copy file
 					didCopy(srcFileInfo.GetPath(), destPath)
-					err = copyFile(srcFileInfo, destPath, buf)
+					err = copyFile(fsHandle, srcFileInfo, destPath, buf)
 					if err != nil {
 						return err
 					}
@@ -296,7 +311,7 @@ func doSync(ranger func(fn func(path string)), sourcer SyncSourcer, opts SyncReb
 						// fmt.Printf("DEBUG will copy file:%v\n", path.Join(dir, srcFile.Name()))
 
 						if !destDirMade {
-							err = os.MkdirAll(destPath, 0777)
+							err = fsHandle.MkdirAll(destPath, 0755)
 							if err != nil {
 								return fmt.Errorf("create dest dir error:%v", err)
 							}
@@ -309,7 +324,7 @@ func doSync(ranger func(fn func(path string)), sourcer SyncSourcer, opts SyncReb
 						// copy file
 						childDestPath := path.Join(destPath, fileName)
 						didCopy(childSrcFile.GetPath(), childDestPath)
-						err = copyFile(childSrcFile, childDestPath, buf)
+						err = copyFile(fsHandle, childSrcFile, childDestPath, buf)
 						if err != nil {
 							return err
 						}
@@ -323,7 +338,7 @@ func doSync(ranger func(fn func(path string)), sourcer SyncSourcer, opts SyncReb
 						// remove uncover names
 						for name, needDelete := range needDeletes {
 							if needDelete {
-								err = os.RemoveAll(path.Join(destPath, name))
+								err = fsHandle.RemoveAll(path.Join(destPath, name))
 								if err != nil {
 									return fmt.Errorf("remove file error:%v", err)
 								}
@@ -412,7 +427,7 @@ func newRegexMatcher(re []string) func(s string) bool {
 	}
 }
 
-func copyFile(srcFile FileInfo, destPath string, buf []byte) (err error) {
+func copyFile(fs writefs.FS, srcFile FileInfo, destPath string, buf []byte) (err error) {
 	// defer func() {
 	// 	fmt.Printf("DEBUG copy file DONE:%v\n", srcFile)
 	// }()
@@ -431,12 +446,12 @@ func copyFile(srcFile FileInfo, destPath string, buf []byte) (err error) {
 		defer srcFileIOCloser.Close()
 	}
 	// TODO: add a flag to indicate whether mkdir is needed
-	err = os.MkdirAll(path.Dir(destPath), 0777)
+	err = fs.MkdirAll(path.Dir(destPath), 0777)
 	if err != nil {
 		err = fmt.Errorf("create dir %v error:%v", path.Dir(destPath), err)
 		return
 	}
-	destFileIO, err := os.OpenFile(destPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0777)
+	destFileIO, err := fs.OpenFileWrite(destPath)
 	if err != nil {
 		err = fmt.Errorf("create dest file error:%v", err)
 		return
@@ -444,15 +459,18 @@ func copyFile(srcFile FileInfo, destPath string, buf []byte) (err error) {
 	defer func() {
 		destFileIO.Close()
 		if err == nil {
-			// fsrc, _ := os.Stat(srcFile)
-			// fb, _ := os.Stat(destName)
-			// fmt.Printf("DEBUG before modify time:%v -> %v\n", destName, fb.ModTime())
-			now := time.Now()
-			// now := fsrc.ModTime().Add(24 * time.Hour)
-			// fmt.Printf("DEBUG will modify time:%v -> %v\n", destName, now)
-			err = os.Chtimes(destPath, now, now)
-			// f, _ := os.Stat(destName)
-			// fmt.Printf("DEBUG after modify time:%v -> %v\n", destName, f.ModTime())
+			if os, ok := fs.(writefs.FSWithTime); ok {
+				// fsrc, _ := os.Stat(srcFile)
+				// fb, _ := os.Stat(destName)
+				// fmt.Printf("DEBUG before modify time:%v -> %v\n", destName, fb.ModTime())
+				// now := fsrc.ModTime().Add(24 * time.Hour)
+				// fmt.Printf("DEBUG will modify time:%v -> %v\n", destName, now)
+				now := time.Now()
+				err = os.Chtimes(destPath, now, now)
+				// f, _ := os.Stat(destName)
+				// fmt.Printf("DEBUG after modify time:%v -> %v\n", destName, f.ModTime())
+			}
+
 		}
 	}()
 

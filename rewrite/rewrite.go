@@ -1,17 +1,25 @@
 package rewrite
 
 import (
+	"crypto/md5"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/xhd2015/go-inspect/rewrite/session/session_impl"
+	"github.com/xhd2015/go-inspect/rewrite/source_import"
+	"github.com/xhd2015/go-vendor-pack/go_cmd"
+	"github.com/xhd2015/go-vendor-pack/go_cmd/model"
+	"github.com/xhd2015/go-vendor-pack/writefs"
 
 	"github.com/xhd2015/go-inspect/code/gen"
 	"github.com/xhd2015/go-inspect/filecopy"
@@ -19,7 +27,6 @@ import (
 	"github.com/xhd2015/go-inspect/inspect/load"
 	"github.com/xhd2015/go-inspect/inspect/util"
 	"github.com/xhd2015/go-inspect/rewrite/session"
-	"github.com/xhd2015/go-inspect/sh"
 )
 
 type Controller interface {
@@ -57,6 +64,11 @@ const (
 	BitStarterMod
 )
 
+// IsExtra controls whether a package should be:
+// - rewritten
+// - copied to rewrite root
+// - replaced in go.mod
+// TODO: make this clear
 func (c PkgFlag) IsExtra() bool {
 	return c&BitExtra == 1
 }
@@ -132,7 +144,7 @@ func CleanGoFsPath(s string) string {
 //
 // the second phase of filecopy.SyncGenerated:
 // overlay, which is for generated file.
-func GenRewrite(args []string, rootDir string, ctrl Controller, rewritter Visitor, opts *BuildRewriteOptions) (res *GenRewriteResult, err error) {
+func GenRewrite(args []string, rewriteRoot string, ctrl Controller, rewritter Visitor, opts *BuildRewriteOptions) (res *GenRewriteResult, err error) {
 	res = &GenRewriteResult{}
 	if opts == nil {
 		opts = &BuildRewriteOptions{}
@@ -142,15 +154,15 @@ func GenRewrite(args []string, rootDir string, ctrl Controller, rewritter Visito
 	verboseRewrite := opts.VerboseRewrite
 	verboseCost := false
 
-	if rootDir == "" {
-		panic(fmt.Errorf("rootDir is empty"))
+	if rewriteRoot == "" {
+		panic(fmt.Errorf("rewriteRoot is empty"))
 	}
 	if opts.Verbose {
-		log.Printf("rewrite root: %s", rootDir)
+		log.Printf("rewrite root: %s", rewriteRoot)
 	}
-	err = os.MkdirAll(rootDir, 0777)
+	err = os.MkdirAll(rewriteRoot, 0777)
 	if err != nil {
-		err = fmt.Errorf("error mkdir %s %v", rootDir, err)
+		err = fmt.Errorf("error mkdir %s %v", rewriteRoot, err)
 		return
 	}
 
@@ -278,46 +290,52 @@ func GenRewrite(args []string, rootDir string, ctrl Controller, rewritter Visito
 	}
 
 	// copy files
-	var destUpdatedBySource map[string]bool
+	var destUpdatedBySource map[string]bool // todo: clear
 	doCopy := func() {
 		if verbose {
 			log.Printf("copying packages files into rewrite dir: total packages=%d", pkgCnt)
 		}
 		copyTime := time.Now()
-		destUpdatedBySource = copyPackageFiles(pkgsFn, rootDir, extraPkgInVendor, hasStd, opts.Force, verboseCopy, verbose)
+		destUpdatedBySource = copyPackageFiles(pkgsFn, session.RewriteFS(), rewriteRoot, extraPkgInVendor, hasStd, opts.Force, verboseCopy, verbose)
 		copyEnd := time.Now()
 		if verboseCost {
 			log.Printf("COST copy:%v", copyEnd.Sub(copyTime))
 		}
 	}
+	_ = destUpdatedBySource
 	doCopy()
-
-	// mod replace only work at module-level, so if at least
-	// one package inside a module is modified, we need to
-	// copy its module out.
-	doMod := func() {
-		// after copied, modify go.mod with replace absoluted
-		if verbose {
-			log.Printf("replacing go.mod with rewritten paths")
-		}
-		goModTime := time.Now()
-		res.MappedMod = makeGomodReplaceAboslute(pkgsFn, rootDir, projectDir, verbose)
-		goModEnd := time.Now()
-		if verboseCost {
-			log.Printf("COST go mod:%v", goModEnd.Sub(goModTime))
-		}
-	}
 
 	// NOTE: only non-vendor needs to replace relative module path
 	// with absolute path, because vendored packages are inside
 	// vendor
 	if !extraPkgInVendor {
+		// TODO: edit go mod in JSON and format back
+		// mod replace only work at module-level, so if at least
+		// one package inside a module is modified, we need to
+		// copy its module out.
+		doMod := func() {
+			// after copied, modify go.mod with replace absoluted
+			if verbose {
+				log.Printf("replacing go.mod with rewritten paths")
+			}
+			goModTime := time.Now()
+			res.MappedMod = makeGomodReplaceAboslute(session.RewriteFS(), pkgsFn, rewriteRoot, projectDir, verbose)
+			goModEnd := time.Now()
+			if verboseCost {
+				log.Printf("COST go mod:%v", goModEnd.Sub(goModTime))
+			}
+		}
 		doMod()
 	}
 
 	writeContentTime := time.Now()
 
 	ctrl.BeforeCopy(g, session)
+
+	// import source first
+	// RewriteFS fill override order(least order higher priority):
+	//   original source -> source import -> overlay -> rewrite each file
+	source_import.OnSessionGenOverlay(session)
 
 	// NOTE: paths in the backMap
 	// are absolute, i.e. ${REWRITE_ROOT}/${ORIG_DIR}/file.go
@@ -326,6 +344,28 @@ func GenRewrite(args []string, rootDir string, ctrl Controller, rewritter Visito
 	// ensure these files are all rooted at ${REWRITE_ROOT},
 	// including GOROOT/src rewritted ones.
 	backMap := ctrl.GenOverlay(g, session)
+
+	newDigestMap := make(map[string]string, len(backMap))
+	for file, content := range backMap {
+		h := md5.New()
+		h.Write(content.Content)
+		newDigestMap[file] = hex.EncodeToString(h.Sum(nil))
+	}
+
+	// TODO: make file path relative to rewrite root
+	var curDigestMap map[string]string
+	srcMD5File := session.Dirs().RewriteMetaSubPath("src-md5.json")
+	srcMD5Content, err := ioutil.ReadFile(srcMD5File)
+	if err != nil && !writefs.IsNotExist(err) {
+		err = fmt.Errorf("read %s: %w", filepath.Base(srcMD5File), err)
+		return
+	}
+	if len(srcMD5Content) > 0 {
+		jsonErr := json.Unmarshal(srcMD5Content, &curDigestMap)
+		if jsonErr != nil {
+			log.Printf("WARN bad src-md5.json ignored: %v", err)
+		}
+	}
 
 	// DEBUG
 	// for file, content := range backMap {
@@ -339,13 +379,13 @@ func GenRewrite(args []string, rootDir string, ctrl Controller, rewritter Visito
 
 	// in this copy config, srcPath is the same with destPath
 	// the extra info is looked up in a back map
-	filecopy.SyncGenerated(
-		func(fn func(path string)) {
+	err = filecopy.SyncGenerated(
+		func(fn func(path string)) { /*ranger*/
 			for path := range backMap {
 				fn(path)
 			}
 		},
-		func(name string) []byte {
+		func(name string) []byte { /*contentGetter*/
 			c, ok := backMap[name]
 			if !ok {
 				panic(fmt.Errorf("no such file:%v", name))
@@ -353,22 +393,9 @@ func GenRewrite(args []string, rootDir string, ctrl Controller, rewritter Visito
 			return c.Content
 		},
 		"", // already rooted
-		func(filePath, destPath string, destFileInfo os.FileInfo) bool {
-			// if ever updated by source, then we always need to update again.
-			// NOTE: this only applies to rewritten file,mock file not influenced.
-			if destUpdatedBySource[filePath] {
-				// log.Printf("DEBUG update by source:%v", filePath)
-				return true
-			}
-			backFile := backMap[filePath].SrcFile
-			if backFile == "" {
-				return true // should always copy if no back file
-			}
-			modTime, ferr := filecopy.GetNewestModTime(backFile)
-			if ferr != nil {
-				panic(ferr)
-			}
-			return !modTime.IsZero() && modTime.After(destFileInfo.ModTime())
+		func(filePath string, destPath string, destFileInfo os.FileInfo) bool { /*isSourceNewer, i.e. true=needCopy*/
+			curDigest := curDigestMap[filePath]
+			return curDigest == "" || curDigest != newDigestMap[filePath]
 		},
 		filecopy.SyncRebaseOptions{
 			Force:   opts.Force,
@@ -377,8 +404,26 @@ func GenRewrite(args []string, rootDir string, ctrl Controller, rewritter Visito
 			OnUpdateStats: filecopy.NewLogger(func(format string, args ...interface{}) {
 				log.Printf(format, args...)
 			}, verboseRewrite, verbose, 200*time.Millisecond),
+			DidCopy: func(srcPath, destPath string) {
+				// log.Printf("DEBUG write %s", srcPath)
+			},
 		},
 	)
+
+	if err != nil {
+		return
+	}
+	// update dest md5
+	newDigestData, err := json.Marshal(newDigestMap)
+	if err != nil {
+		err = fmt.Errorf("marhsal digest map: %w", err)
+		return
+	}
+	err = ioutil.WriteFile(srcMD5File, newDigestData, 0755)
+	if err != nil {
+		err = fmt.Errorf("write digest map: %w", err)
+		return
+	}
 
 	writeContentEnd := time.Now()
 	if verboseCost {
@@ -394,7 +439,7 @@ func GenRewrite(args []string, rootDir string, ctrl Controller, rewritter Visito
 var ignores = []string{"(.*/)?\\.git\\b", "(.*/)?node_modules\\b"}
 
 // copyPackageFiles copy starter packages(with all packages under the same module) and extra packages into rootDir, to bundle them together.
-func copyPackageFiles(pkgs func(func(p inspect.Pkg, flag PkgFlag) bool), rootDir string, extraPkgInVendor bool, hasStd bool, force bool, verboseDetail bool, verboseOverall bool) (destUpdated map[string]bool) {
+func copyPackageFiles(pkgs func(func(p inspect.Pkg, flag PkgFlag) bool), fs writefs.FS, rootDir string, extraPkgInVendor bool, hasStd bool, force bool, verboseDetail bool, verboseOverall bool) (destUpdated map[string]bool) {
 	var dirList []string
 	fileIgnores := append([]string(nil), ignores...)
 
@@ -444,7 +489,7 @@ func copyPackageFiles(pkgs func(func(p inspect.Pkg, flag PkgFlag) bool), rootDir
 	size := int64(0)
 	err := filecopy.SyncRebase(dirList, rootDir, filecopy.SyncRebaseOptions{
 		Ignores:         fileIgnores,
-		Force:           force,
+		Force:           true, // always set to true to force read all files into memory
 		DeleteNotFound:  true, // uncovered files are deleted
 		ProcessDestPath: cleanGoFsPath,
 		OnUpdateStats: filecopy.NewLogger(func(format string, args ...interface{}) {
@@ -454,6 +499,7 @@ func copyPackageFiles(pkgs func(func(p inspect.Pkg, flag PkgFlag) bool), rootDir
 			destUpdatedM.Store(destPath, true)
 			atomic.AddInt64(&size, 1)
 		},
+		FS: fs,
 	})
 
 	destUpdated = make(map[string]bool, atomic.LoadInt64(&size))
@@ -474,16 +520,20 @@ func copyPackageFiles(pkgs func(func(p inspect.Pkg, flag PkgFlag) bool), rootDir
 }
 
 // go mod's replace, find relative paths and replace them with absolute path
-func makeGomodReplaceAboslute(pkgs func(func(pkg inspect.Pkg, flag PkgFlag) bool), rebaseDir string, projectDir string, verbose bool) (mappedMod map[string]string) {
+func makeGomodReplaceAboslute(fs writefs.FS, pkgs func(func(pkg inspect.Pkg, flag PkgFlag) bool), rebaseDir string, projectDir string, verbose bool) (mappedMod map[string]string) {
 	// if there is vendor/modules.txt, should also replace there
 	replaceMap := make(map[string]string)
 
-	goModEditReplace := func(oldpath string, newPath string) string {
-		return fmt.Sprintf("go mod edit -replace=%s=%s", sh.Quote(oldpath), sh.Quote(newPath))
+	type goModReplace struct {
+		oldPath string
+		newPath string
 	}
+	// goModEditReplace := func(oldpath string, newPath string) string {
+	// 	return fmt.Sprintf("go mod edit -replace=%s=%s", sh.Quote(oldpath), sh.Quote(newPath))
+	// }
 	// premap: modPath -> ${rebaseDir}/${modDir}
 	preMap := make(map[string]string)
-	var preCmdList []string
+	var preReplaceList []goModReplace
 	mappedMod = make(map[string]string)
 
 	// get modules(for mods, actually only 1 module, i.e. the current module will be processed)
@@ -512,11 +562,13 @@ func makeGomodReplaceAboslute(pkgs func(func(pkg inspect.Pkg, flag PkgFlag) bool
 			if preMap[modPath] != "" {
 				return true
 			}
+
 			// dir always absolute
 			cleanDir := cleanGoFsPath(modDir)
 			newPath := path.Join(rebaseDir, cleanDir)
 			preMap[modPath] = newPath
-			preCmdList = append(preCmdList, goModEditReplace(modPath, newPath))
+			// preReplaceList = append(preReplaceList, goModEditReplace(modPath, newPath))
+			preReplaceList = append(preReplaceList, goModReplace{oldPath: modPath, newPath: newPath})
 			replaceMap[modPath] = newPath
 
 			mappedMod[modDir] = cleanDir
@@ -539,15 +591,29 @@ func makeGomodReplaceAboslute(pkgs func(func(pkg inspect.Pkg, flag PkgFlag) bool
 		if rebaseDir != "" {
 			dir = path.Join(rebaseDir, dir)
 		}
-		gomod, err := util.GetGoMod(dir)
+		goModFile := filepath.Join(dir, "go.mod")
+
+		var gomod *model.GoMod
+		var err error
+
+		if _, ok := fs.(writefs.SysFS); ok {
+			gomod, err = go_cmd.ParseGoMod(dir)
+		} else {
+			var content []byte
+			content, err = writefs.ReadFile(fs, goModFile)
+			if err != nil {
+				panic(err)
+			}
+			gomod, err = go_cmd.ParseGoModContent(string(content))
+		}
 		if err != nil {
 			panic(err)
 		}
 
 		// replace with absolute paths
-		var replaceList []string
+		var replaceList []goModReplace
 		if len(gomod.Replace) > 0 {
-			replaceList = make([]string, 0, len(gomod.Replace))
+			replaceList = make([]goModReplace, 0, len(gomod.Replace))
 		}
 
 		for _, rp := range gomod.Replace {
@@ -562,7 +628,8 @@ func makeGomodReplaceAboslute(pkgs func(func(pkg inspect.Pkg, flag PkgFlag) bool
 					oldv += "@" + rp.Old.Version
 				}
 				newPath := path.Join(origDir, rp.New.Path)
-				replaceList = append(replaceList, goModEditReplace(oldv, newPath))
+				// replaceList = append(replaceList, goModEditReplace(oldv, newPath))
+				replaceList = append(replaceList, goModReplace{oldPath: oldv, newPath: newPath})
 
 				// replace vendor/modules.txt without version will effectively replace all version
 				// # PKG => PATH
@@ -571,34 +638,60 @@ func makeGomodReplaceAboslute(pkgs func(func(pkg inspect.Pkg, flag PkgFlag) bool
 			}
 		}
 
-		if len(replaceList) > 0 || len(preCmdList) > 0 {
+		if len(replaceList) > 0 || len(preReplaceList) > 0 {
 			if verbose {
 				log.Printf("make absolute replace in go.mod for %v", mod.OrigPath())
 			}
-			cmds := append([]string{
-				fmt.Sprintf("cd %s", sh.Quote(dir)),
-			}, replaceList...)
-			cmds = append(cmds, preCmdList...)
-			err = sh.RunBash(cmds, verbose)
-			if err != nil {
-				panic(err)
+			doCmds := func(goModFile string) error {
+				for _, replace := range replaceList {
+					err := go_cmd.GoModReplace(goModFile, replace.oldPath, replace.newPath)
+					if err != nil {
+						return fmt.Errorf("replace %s->%s: %w", replace.oldPath, replace.newPath, err)
+					}
+				}
+				for _, replace := range preReplaceList {
+					err := go_cmd.GoModReplace(goModFile, replace.oldPath, replace.newPath)
+					if err != nil {
+						return fmt.Errorf("pre replace %s->%s: %w", replace.oldPath, replace.newPath, err)
+					}
+				}
+				return nil
+			}
+
+			var cmdErr error
+			if _, ok := fs.(writefs.SysFS); ok {
+				cmdErr = doCmds(goModFile)
+			} else {
+				// read and update
+				content, err := writefs.ReadFile(fs, goModFile)
+				if err != nil {
+					panic(err)
+				}
+				newGoMod, err := go_cmd.GoModEdit(string(content), doCmds)
+				if err != nil {
+					panic(err)
+				}
+				cmdErr = writefs.WriteFile(fs, goModFile, []byte(newGoMod))
+			}
+			if cmdErr != nil {
+				panic(cmdErr)
 			}
 		}
 	}
 
 	// because files are already copied, so we can check vendor/modules.txt locally
-	vendorErr := appendVendorModulesIgnoreNonExist(path.Join(rebaseDir, projectDir, "vendor/modules.txt"), replaceMap)
+	vendorErr := appendVendorModulesIgnoreNonExist(fs, path.Join(rebaseDir, projectDir, "vendor/modules.txt"), replaceMap)
 	if vendorErr != nil {
 		log.Printf("ERROR failed to update vendor/modules.txt: %v\n", vendorErr)
 		panic(vendorErr)
 	}
 	return
 }
-func appendVendorModulesIgnoreNonExist(path string, replaceMap map[string]string) (err error) {
+func appendVendorModulesIgnoreNonExist(fs writefs.FS, path string, replaceMap map[string]string) (err error) {
 	if len(replaceMap) == 0 {
 		return
 	}
-	bytes, err := ioutil.ReadFile(path)
+	bytes, err := writefs.ReadFile(fs, path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// if the file does not exist, we can safely ignore updating it
@@ -640,7 +733,7 @@ func appendVendorModulesIgnoreNonExist(path string, replaceMap map[string]string
 		lines[i] = newLine
 	}
 
-	err = ioutil.WriteFile(path, []byte(strings.Join(lines, "\n")), 0777)
+	err = writefs.WriteFile(fs, path, []byte(strings.Join(lines, "\n")))
 	return
 }
 

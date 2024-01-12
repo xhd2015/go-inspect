@@ -5,18 +5,18 @@ import (
 	"path"
 	"testing"
 
-	"github.com/xhd2015/go-inspect/inspect"
+	"github.com/xhd2015/go-inspect/rewrite/session"
 )
 
 // working
 // go test -run TestRewriteStdRuntimeGenInPlace -v ./project
 func TestRewriteStdRuntimeGenInPlace(t *testing.T) {
-	OnProjectRewrite(func(proj Project) Rewriter {
+	OnProjectRewrite(func(proj session.Project) Rewriter {
 		return NewDefaultRewriter(&RewriteCallback{
-			BeforeLoad: func(proj Project) {
-				proj.Options().SetRewriteStd(true)
+			BeforeLoad: func(proj session.Project, session session.Session) {
+				session.Options().SetRewriteStd(true)
 			},
-			GenOverlay: func(proj Project, session inspect.Session) {
+			GenOverlay: func(proj session.Project, session session.Session) {
 				g := proj.Global()
 
 				runtimePkg := g.GetPkg("runtime")
@@ -31,7 +31,7 @@ func TestRewriteStdRuntimeGenInPlace(t *testing.T) {
 				}
 
 				pkgDir := proj.AllocExtraPkg("0")
-				proj.NewFile(path.Join(pkgDir, "export_g_runtime_impl.go"), fmt.Sprintf(`package init_getg
+				session.SetRewriteFile(path.Join(pkgDir, "export_g_runtime_impl.go"), fmt.Sprintf(`package init_getg
 
 				import (
 					"runtime"
@@ -63,12 +63,12 @@ func TestRewriteStdRuntimeGenInPlace(t *testing.T) {
 // not working, show error:  no required module provides package github.com/xhd2015/go-inspect/inspect/project/testdata/export_g; to add it: ....
 // go test -run TestRewriteStdRuntimeCallback -v ./project
 func TestRewriteStdRuntimeCallback(t *testing.T) {
-	OnProjectRewrite(func(proj Project) Rewriter {
+	OnProjectRewrite(func(proj session.Project) Rewriter {
 		return NewDefaultRewriter(&RewriteCallback{
-			BeforeLoad: func(proj Project) {
-				proj.Options().SetRewriteStd(true)
+			BeforeLoad: func(proj session.Project, session session.Session) {
+				session.Options().SetRewriteStd(true)
 			},
-			GenOverlay: func(proj Project, session inspect.Session) {
+			GenOverlay: func(proj session.Project, session session.Session) {
 				g := proj.Global()
 				runtimePkg := g.GetPkg("runtime")
 
@@ -92,12 +92,12 @@ func TestRewriteStdRuntimeCallback(t *testing.T) {
 // the export_g belongs to another module
 // go test -run TestRewriteStdRuntimeGenIntoExportG -v ./project
 func TestRewriteStdRuntimeGenIntoExportG(t *testing.T) {
-	OnProjectRewrite(func(proj Project) Rewriter {
+	OnProjectRewrite(func(proj session.Project) Rewriter {
 		return NewDefaultRewriter(&RewriteCallback{
-			BeforeLoad: func(proj Project) {
-				proj.Options().SetRewriteStd(true)
+			BeforeLoad: func(proj session.Project, session session.Session) {
+				session.Options().SetRewriteStd(true)
 			},
-			GenOverlay: func(proj Project, session inspect.Session) {
+			GenOverlay: func(proj session.Project, session session.Session) {
 				g := proj.Global()
 
 				runtimePkg := g.GetPkg("runtime")

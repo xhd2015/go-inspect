@@ -1,17 +1,20 @@
 package project
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"fmt"
 	"go/ast"
 	"os"
 	"path"
+	"path/filepath"
 
 	"github.com/xhd2015/go-inspect/inspect"
 	"github.com/xhd2015/go-inspect/inspect/util"
 	"github.com/xhd2015/go-inspect/rewrite"
 	"github.com/xhd2015/go-inspect/rewrite/session"
 	"github.com/xhd2015/go-inspect/rewrite/session/session_impl"
-	"github.com/xhd2015/go-inspect/rewrite/source_import"
+	"github.com/xhd2015/go-vendor-pack/writefs/memfs"
 )
 
 type EditCallbackFn = session.EditCallbackFn
@@ -151,18 +154,20 @@ func doRewriteNoCheckPanic(loadArgs []string, opts *RewriteCallbackOpts) (proj *
 	if rewriteBase == "" {
 		rewriteBase = os.TempDir()
 	}
-	rewriteRoot := rewrite.GetRewriteRoot(rewriteBase, rewriteName)
 
 	projectAbsDir, err := util.ToAbsPath(buildOpts.ProjectDir)
 	if err != nil {
 		panic(fmt.Errorf("get abs dir err:%v", err))
 	}
+
+	dg := md5.New()
+	dg.Write([]byte(projectAbsDir))
+	// rewriteMetaRoot = {rewriteBase}/{rewriteName}/{path_md5}
+	rewriteMetaRoot := rewrite.GetRewriteRoot(filepath.Join(rewriteBase, rewriteName), hex.EncodeToString(dg.Sum(nil)))
+	rewriteRoot := filepath.Join(rewriteMetaRoot, "src")
+
 	projectRewriteRoot := path.Join(rewriteRoot, projectAbsDir)
-
-	tmpVendorName := util.NextFileNameUnderDir(projectAbsDir, "tmp-vendors", "")
-	rewriteProjectVendorRoot := path.Join(projectRewriteRoot, tmpVendorName)
-
-	genMap := make(map[string]*rewrite.Content)
+	rewriteProjectVendorRoot := path.Join(rewriteRoot, "vendor")
 
 	ctrl := &rewrite.ControllerFuncs{
 		BeforeLoadFn: func(rwOpts *rewrite.BuildRewriteOptions, session session.Session) {
@@ -172,6 +177,7 @@ func doRewriteNoCheckPanic(loadArgs []string, opts *RewriteCallbackOpts) (proj *
 			})
 			dirs := &sessionDirs{
 				projectRoot:              projectAbsDir,
+				rewriteMetaRoot:          rewriteMetaRoot,
 				rewriteRoot:              rewriteRoot,
 				rewriteProjectRoot:       projectRewriteRoot,
 				rewriteProjectVendorRoot: rewriteProjectVendorRoot,
@@ -184,13 +190,9 @@ func doRewriteNoCheckPanic(loadArgs []string, opts *RewriteCallbackOpts) (proj *
 					goFlags:    opts.BuildOpts.GoFlags,
 					buildFlags: opts.BuildOpts.BuildFlags,
 				},
-				args:               loadArgs,
-				rewriteRoot:        dirs.rewriteRoot,
-				rewriteProjectRoot: dirs.rewriteProjectRoot,
-				projectRoot:        dirs.projectRoot,
-				genMap:             genMap,
-				vendor:             hasVendorDir(projectAbsDir),
-				ctxData:            make(map[interface{}]interface{}),
+				args:        loadArgs,
+				projectRoot: dirs.projectRoot,
+				vendor:      hasVendorDir(projectAbsDir),
 			}
 			session_impl.OnSessionProject(session, proj)
 			opts.BeforeLoad(proj, session)
@@ -239,32 +241,41 @@ func doRewriteNoCheckPanic(loadArgs []string, opts *RewriteCallbackOpts) (proj *
 				opts.GenOverlay(proj, session)
 			}
 
-			// source import
-			source_import.OnSessionGenOverlay(session)
-
 			// template code
 			for file, code := range opts.PreCode {
-				genMap[rewrite.CleanGoFsPath(path.Join(rewriteRoot, file))] = &rewrite.Content{
-					Content: []byte(code),
+				err := session.SetRewriteFile(file, code)
+				if err != nil {
+					panic(fmt.Errorf("pre code: %s %w", file, err))
 				}
 			}
 
 			session.Gen(&EditCallbackFn{
 				Rewrites: func(f inspect.FileContext, content string) bool {
-					newPath := rewrite.CleanGoFsPath(path.Join(rewriteRoot, f.AbsPath()))
-					genMap[newPath] = &rewrite.Content{
-						SrcFile: f.AbsPath(),
-						Content: []byte(content),
+					absPath := f.AbsPath()
+					err := session.SetRewriteFile(f.AbsPath(), content)
+					if err != nil {
+						panic(fmt.Errorf("rewrite: %s %w", absPath, err))
 					}
 					return true
 				},
 				Pkg: func(p inspect.Pkg, kind, realName, content string) bool {
-					newPath := rewrite.CleanGoFsPath(path.Join(rewriteRoot, p.Dir(), realName+".go"))
-					genMap[newPath] = &rewrite.Content{
-						Content: []byte(content),
+					name := path.Join(p.Dir(), realName+".go")
+					err := session.SetRewriteFile(name, content)
+					if err != nil {
+						panic(fmt.Errorf("rewrite pkg file: %s %w", name, err))
 					}
 					return true
 				},
+			})
+
+			genMap := make(map[string]*rewrite.Content)
+			session.RewriteFS().TraversePath(func(path string, e memfs.MemFileInfo) bool {
+				if !e.IsDir() {
+					genMap[path] = &rewrite.Content{
+						Content: e.Buffer().Bytes(),
+					}
+				}
+				return true
 			})
 			return genMap
 		},

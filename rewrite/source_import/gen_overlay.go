@@ -33,6 +33,8 @@ func genOverlay(session session.Session, modMapping Modules) {
 	proj := session.Project()
 	dirs := session.Dirs()
 
+	wfs := session.RewriteFS()
+
 	goVersion, err := go_info.GetGoVersionCached()
 	if err != nil {
 		panic(err)
@@ -45,8 +47,25 @@ func genOverlay(session session.Session, modMapping Modules) {
 		rewriteVendorDir = dirs.RewriteProjectVendorRoot()
 	}
 
-	// copy each module groups
+	// process in order
+	type modInfo struct {
+		modPath string
+		mods    []*model.Module
+	}
+	modInfos := make([]*modInfo, 0, len(modMapping))
 	for modPath, mods := range modMapping {
+		modInfos = append(modInfos, &modInfo{
+			modPath: modPath,
+			mods:    mods,
+		})
+	}
+	sort.Slice(modInfos, func(i, j int) bool {
+		return modInfos[i].modPath < modInfos[j].modPath
+	})
+	// copy each module groups
+	for _, modInfo := range modInfos {
+		modPath := modInfo.modPath
+		mods := modInfo.mods
 		projectMod := g.GetModule(modPath)
 		var projectModAdapter *model.Module
 		if projectMod != nil && !projectMod.IsStd() {
@@ -80,7 +99,7 @@ func genOverlay(session session.Session, modMapping Modules) {
 				}
 
 				// copy files without override
-				err := helper.OverrideFiles(mod.FS, "vendor/"+pkgPath, rewriteVendorDir+"/"+pkgPath)
+				err := helper.OverrideFilesFS(mod.FS, wfs, "vendor/"+pkgPath, rewriteVendorDir+"/"+pkgPath)
 				if err != nil {
 					panic(fmt.Errorf("GenOverlay: %w", err))
 				}
@@ -104,7 +123,7 @@ func genOverlay(session session.Session, modMapping Modules) {
 				if err != nil {
 					panic(err)
 				}
-				err = helper.CopyFiles(mapFS, modPath, replaceModPath, nil)
+				err = helper.CopyFilesFS(mapFS, wfs, modPath, replaceModPath, nil)
 				if err != nil {
 					panic(err)
 				}
@@ -116,12 +135,12 @@ func genOverlay(session session.Session, modMapping Modules) {
 		// and if vendor, update vendor/modules.txt.
 		// NOTE: can always ignore sums if we make absolution replace here
 		// and also NOTE that, seems sums not necessary when in vendor mode without replace
-		err := helper.AddVersionAndSum(dirs.RewriteProjectRoot(), modPath, maxMod.Version, "" /*sums optional*/, replaceModPath)
+		err := helper.AddVersionAndSumFS(wfs, dirs.RewriteProjectRoot(), modPath, maxMod.Version, "" /*sums optional*/, replaceModPath)
 		if err != nil {
 			panic(fmt.Errorf("adding sum:%s %w", modPath, err))
 		}
 		if !isVendor {
-			err := helper.TruncateGoMod(path.Join(replaceModPath, "go.mod"), modPath, goVersion.Major, goVersion.Minor)
+			err := helper.TruncateGoModFS(wfs, path.Join(replaceModPath, "go.mod"), modPath, goVersion.Major, goVersion.Minor)
 			if err != nil {
 				panic(fmt.Errorf("truncating go mod: %s %w", modPath, err))
 			}
