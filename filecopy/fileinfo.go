@@ -8,6 +8,8 @@ import (
 	"os"
 	"path"
 	"time"
+
+	"github.com/xhd2015/go-vendor-pack/writefs"
 )
 
 // FileInfo represents copy source
@@ -41,36 +43,62 @@ type mapSourcer struct {
 
 	sourceNewerChecker func(filePath, destPath string, destFileInfo os.FileInfo) bool
 }
+type fsSourcer struct {
+	baseDir string
+	fs      writefs.FS
+}
 
 var _ SyncSourcer = ((*rebaseSourcer)(nil))
 var _ SyncSourcer = ((*mapSourcer)(nil))
+var _ SyncSourcer = (*fsSourcer)(nil)
 
 func (c *rebaseSourcer) GetSrcFileInfo(srcFilePath string) (srcFile FileInfo, err error) {
-	osFile, err := os.Stat(srcFilePath)
-	if err != nil {
-		return
-	}
-	srcFile = NewFileInfo(srcFilePath, osFile)
-	return
+	return fsGetSrcFileInfo(writefs.SysFS{}, srcFilePath)
+
 }
 func (c *rebaseSourcer) GetSrcChildFiles(srcDir string) (srcFiles []FileInfo, err error) {
-	osFiles, err := ioutil.ReadDir(srcDir)
-	if err != nil {
-		return
-	}
-	srcFiles = NewFileInfos(srcDir, osFiles)
-	return
+	return fsGetSrcChildFiles(writefs.SysFS{}, srcDir)
 }
 
 func (c *rebaseSourcer) GetDestPath(srcPath string) string {
 	return path.Join(c.rebaseDir, srcPath)
 }
 
+// GetDestPath implements SyncSourcer.
+func (c *fsSourcer) GetDestPath(srcPath string) string {
+	return path.Join(c.baseDir, srcPath)
+}
+
+func (c *fsSourcer) GetSrcFileInfo(srcPath string) (srcFile FileInfo, err error) {
+	return fsGetSrcFileInfo(c.fs, srcPath)
+}
+func (c *fsSourcer) GetSrcChildFiles(srcDir string) (srcFiles []FileInfo, err error) {
+	return fsGetSrcChildFiles(c.fs, srcDir)
+}
+
+func fsGetSrcFileInfo(fs writefs.FS, srcPath string) (srcFile FileInfo, err error) {
+	osFile, err := fs.Stat(srcPath)
+	if err != nil {
+		return
+	}
+	srcFile = NewFileInfo(fs, srcPath, osFile)
+	return
+}
+
+func fsGetSrcChildFiles(fs writefs.FS, srcDir string) (srcFiles []FileInfo, err error) {
+	osFiles, err := fs.ReadDir(srcDir)
+	if err != nil {
+		return
+	}
+	srcFiles = NewFileInfos(fs, srcDir, osFiles)
+	return
+}
+
 func (c *mapSourcer) GetSrcFileInfo(srcFilePath string) (srcFile FileInfo, err error) {
 	return &mapFile{
-		path:          path.Join(c.baseDir, srcFilePath),
-		relativePath:  srcFilePath,
-		content:       c.getContent(srcFilePath),
+		path:               path.Join(c.baseDir, srcFilePath),
+		relativePath:       srcFilePath,
+		content:            c.getContent(srcFilePath),
 		sourceNewerChecker: c.sourceNewerChecker,
 	}, nil
 }
@@ -143,15 +171,18 @@ type osFileInfo struct {
 	f    os.FileInfo
 }
 
-func NewFileInfo(path string, f os.FileInfo) FileInfo {
-	return &osFileInfo{path: path, f: f}
-}
-func NewFileInfos(dir string, f []os.FileInfo) []FileInfo {
-	fs := make([]FileInfo, 0, len(f))
-	for _, x := range f {
-		fs = append(fs, NewFileInfo(path.Join(dir, x.Name()), x))
+func NewFileInfo(fs writefs.FS, path string, f os.FileInfo) FileInfo {
+	if _, ok := fs.(writefs.SysFS); ok {
+		return &osFileInfo{path: path, f: f}
 	}
-	return fs
+	return &fsFileInfo{fs: fs, osFileInfo: osFileInfo{path: path, f: f}}
+}
+func NewFileInfos(fs writefs.FS, dir string, f []os.FileInfo) []FileInfo {
+	fileInfos := make([]FileInfo, 0, len(f))
+	for _, x := range f {
+		fileInfos = append(fileInfos, NewFileInfo(fs, path.Join(dir, x.Name()), x))
+	}
+	return fileInfos
 }
 
 func (c *osFileInfo) IsFile() bool {
@@ -176,6 +207,15 @@ func (c *osFileInfo) NewerThan(destPath string, destFileInfo os.FileInfo) bool {
 }
 func (c *osFileInfo) Open() (io.Reader, error) {
 	return os.Open(c.path)
+}
+
+type fsFileInfo struct {
+	fs writefs.FS
+	osFileInfo
+}
+
+func (c *fsFileInfo) Open() (io.Reader, error) {
+	return c.fs.OpenFileRead(c.path)
 }
 
 // mapFile

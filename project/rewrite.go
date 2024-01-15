@@ -14,7 +14,6 @@ import (
 	"github.com/xhd2015/go-inspect/rewrite"
 	"github.com/xhd2015/go-inspect/rewrite/session"
 	"github.com/xhd2015/go-inspect/rewrite/session/session_impl"
-	"github.com/xhd2015/go-vendor-pack/writefs/memfs"
 )
 
 type EditCallbackFn = session.EditCallbackFn
@@ -236,7 +235,7 @@ func doRewriteNoCheckPanic(loadArgs []string, opts *RewriteCallbackOpts) (proj *
 				})
 			}
 		},
-		GenOverlayFn: func(g inspect.Global, session session.Session) map[string]*rewrite.Content {
+		GenOverlayFn: func(g inspect.Global, session session.Session) {
 			if opts.GenOverlay != nil {
 				opts.GenOverlay(proj, session)
 			}
@@ -267,17 +266,6 @@ func doRewriteNoCheckPanic(loadArgs []string, opts *RewriteCallbackOpts) (proj *
 					return true
 				},
 			})
-
-			genMap := make(map[string]*rewrite.Content)
-			session.RewriteFS().TraversePath(func(path string, e memfs.MemFileInfo) bool {
-				if !e.IsDir() {
-					genMap[path] = &rewrite.Content{
-						Content: e.Buffer().Bytes(),
-					}
-				}
-				return true
-			})
-			return genMap
 		},
 	}
 	vis := &rewrite.Visitors{

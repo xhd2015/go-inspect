@@ -20,6 +20,7 @@ import (
 	"github.com/xhd2015/go-vendor-pack/go_cmd"
 	"github.com/xhd2015/go-vendor-pack/go_cmd/model"
 	"github.com/xhd2015/go-vendor-pack/writefs"
+	"github.com/xhd2015/go-vendor-pack/writefs/memfs"
 
 	"github.com/xhd2015/go-inspect/code/gen"
 	"github.com/xhd2015/go-inspect/filecopy"
@@ -39,7 +40,7 @@ type Controller interface {
 	// GenOverlay generate overlay for src files.
 	// Overlay is a rewritten content of the original file or just a generated content
 	// without original file/dir.
-	GenOverlay(g inspect.Global, session session.Session) map[string]*Content
+	GenOverlay(g inspect.Global, session session.Session)
 }
 
 type ControllerFuncs struct {
@@ -48,7 +49,7 @@ type ControllerFuncs struct {
 	AfterLoadFn   func(g inspect.Global, session session.Session)
 	FilterPkgsFn  func(g inspect.Global, session session.Session) func(func(p inspect.Pkg, pkgFlag PkgFlag) bool)
 	BeforeCopyFn  func(g inspect.Global, session session.Session)
-	GenOverlayFn  func(g inspect.Global, session session.Session) map[string]*Content
+	GenOverlayFn  func(g inspect.Global, session session.Session)
 }
 type Content struct {
 	SrcFile string
@@ -112,11 +113,11 @@ func (c *ControllerFuncs) BeforeCopy(g inspect.Global, session session.Session) 
 	}
 	c.BeforeCopyFn(g, session)
 }
-func (c *ControllerFuncs) GenOverlay(g inspect.Global, session session.Session) map[string]*Content {
+func (c *ControllerFuncs) GenOverlay(g inspect.Global, session session.Session) {
 	if c.GenOverlayFn == nil {
-		return nil
+		return
 	}
-	return c.GenOverlayFn(g, session)
+	c.GenOverlayFn(g, session)
 }
 
 func GetTmpRewriteRoot(name string) string {
@@ -343,14 +344,21 @@ func GenRewrite(args []string, rewriteRoot string, ctrl Controller, rewritter Vi
 	// the upper layer package 'project' will
 	// ensure these files are all rooted at ${REWRITE_ROOT},
 	// including GOROOT/src rewritted ones.
-	backMap := ctrl.GenOverlay(g, session)
+	ctrl.GenOverlay(g, session)
+	contentMap := make(map[string][]byte)
 
-	newDigestMap := make(map[string]string, len(backMap))
-	for file, content := range backMap {
-		h := md5.New()
-		h.Write(content.Content)
-		newDigestMap[file] = hex.EncodeToString(h.Sum(nil))
-	}
+	rewriteFS := session.RewriteFS()
+	newDigestMap := make(map[string]string)
+	rewriteFS.TraversePath(func(path string, e memfs.MemFileInfo) bool {
+		if !e.IsDir() {
+			content := e.Buffer().Bytes()
+			h := md5.New()
+			h.Write(content)
+			newDigestMap[path] = hex.EncodeToString(h.Sum(nil))
+			contentMap[path] = content
+		}
+		return true
+	})
 
 	// TODO: make file path relative to rewrite root
 	var curDigestMap map[string]string
@@ -376,36 +384,27 @@ func GenRewrite(args []string, rewriteRoot string, ctrl Controller, rewritter Vi
 	// 		b = a
 	// 	}
 	// }
-
 	// in this copy config, srcPath is the same with destPath
 	// the extra info is looked up in a back map
-	err = filecopy.SyncGenerated(
-		func(fn func(path string)) { /*ranger*/
-			for path := range backMap {
-				fn(path)
-			}
-		},
-		func(name string) []byte { /*contentGetter*/
-			c, ok := backMap[name]
-			if !ok {
-				panic(fmt.Errorf("no such file:%v", name))
-			}
-			return c.Content
-		},
-		"", // already rooted
-		func(filePath string, destPath string, destFileInfo os.FileInfo) bool { /*isSourceNewer, i.e. true=needCopy*/
-			curDigest := curDigestMap[filePath]
-			return curDigest == "" || curDigest != newDigestMap[filePath]
-		},
+	err = filecopy.SyncFS(
+		rewriteFS,
+		[]string{rewriteRoot},
+		"", // target dir already rooted
 		filecopy.SyncRebaseOptions{
-			Force:   opts.Force,
-			Ignores: ignores,
+			Ignores:        ignores,
+			DeleteNotFound: true,
+			Force:          opts.Force,
 			// ProcessDestPath: cleanFsGoPath, // not needed as we already did that
 			OnUpdateStats: filecopy.NewLogger(func(format string, args ...interface{}) {
 				log.Printf(format, args...)
 			}, verboseRewrite, verbose, 200*time.Millisecond),
 			DidCopy: func(srcPath, destPath string) {
 				// log.Printf("DEBUG write %s", srcPath)
+			},
+			ShouldCopyFile: func(srcFileInfo filecopy.FileInfo, destPath string, destFileInfo os.FileInfo) (bool, error) { /*isSourceNewer, i.e. true=needCopy*/
+				filePath := srcFileInfo.GetPath()
+				curDigest := curDigestMap[filePath]
+				return curDigest == "" || curDigest != newDigestMap[filePath], nil
 			},
 		},
 	)

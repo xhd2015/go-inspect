@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path"
 	"regexp"
@@ -35,11 +36,24 @@ type SyncRebaseOptions struct {
 
 	DidCopy func(srcPath string, destPath string)
 
+	ShouldCopyFile func(srcFileInfo FileInfo, destPath string, destFile fs.FileInfo) (bool, error)
+
+	// target filesystem
 	FS writefs.FS
 }
 
 func SyncRebase(initPaths []string, rebaseDir string, opts SyncRebaseOptions) error {
 	return Sync(initPaths, &rebaseSourcer{rebaseDir: rebaseDir}, opts)
+}
+func SyncFS(srcFS writefs.FS, initPaths []string, targetBaseDir string, opts SyncRebaseOptions) error {
+	return doSync(func(fn func(path string)) {
+		for _, p := range initPaths {
+			fn(p)
+		}
+	}, &fsSourcer{
+		baseDir: targetBaseDir,
+		fs:      srcFS,
+	}, opts)
 }
 
 // SyncGeneratedMap
@@ -91,6 +105,7 @@ func doSync(ranger func(fn func(path string)), sourcer SyncSourcer, opts SyncReb
 		fsHandle = opts.FS
 	}
 
+	shouldCopyFile := opts.ShouldCopyFile
 	shouldIgnore := newRegexMatcher(opts.Ignores)
 	readDestDir := func(dest string) (destFiles []os.FileInfo, destDirMade bool, err error) {
 		destFiles, readErr := fsHandle.ReadDir(dest)
@@ -184,6 +199,7 @@ func doSync(ranger func(fn func(path string)), sourcer SyncSourcer, opts SyncReb
 				// fmt.Printf("DEBUG sync file:%v\n", srcPath)
 				defer waitGroup.Done()
 				if shouldIgnore(srcPath) {
+					// fmt.Printf("DEBUG ignore file:%v\n", srcPath)
 					return nil
 				}
 				destPath := processDestPath(sourcer.GetDestPath(srcPath))
@@ -214,7 +230,18 @@ func doSync(ranger func(fn func(path string)), sourcer SyncSourcer, opts SyncReb
 						needCopy = true
 					} else {
 						needDelDest = !destFile.Mode().IsRegular()
-						needCopy = needDelDest || (opts.Force || srcFileInfo.NewerThan(destPath, destFile))
+						if needDelDest {
+							needCopy = true
+						} else if opts.Force {
+							needCopy = true
+						} else if shouldCopyFile != nil {
+							needCopy, err = shouldCopyFile(srcFileInfo, destPath, destFile)
+							if err != nil {
+								return err
+							}
+						} else {
+							needCopy = srcFileInfo.NewerThan(destPath, destFile)
+						}
 					}
 					if !needCopy {
 						atomic.AddInt64(&finishedFiles, 1)
@@ -300,7 +327,22 @@ func doSync(ranger func(fn func(path string)), sourcer SyncSourcer, opts SyncReb
 								// but we actually can use length to
 								// we need
 								// actually
-								if !childSrcFile.NewerThan(path.Join(destPath, fileName), destFile) {
+								shouldCopy := true
+								if shouldCopyFile != nil {
+									needCopy, err := shouldCopyFile(childSrcFile, path.Join(destPath, fileName), destFile)
+									if err != nil {
+										return err
+									}
+									if !needCopy {
+										shouldCopy = false
+									}
+								} else {
+									needCopy := childSrcFile.NewerThan(path.Join(destPath, fileName), destFile)
+									if !needCopy {
+										shouldCopy = false
+									}
+								}
+								if !shouldCopy {
 									atomic.AddInt64(&finishedFiles, 1)
 									onUpdateStats()
 									continue
@@ -439,7 +481,7 @@ func copyFile(fs writefs.FS, srcFile FileInfo, destPath string, buf []byte) (err
 	srcFileIO, err := srcFile.Open()
 	// srcFileIO, err := os.OpenFile(srcPath, os.O_RDONLY, 0777)
 	if err != nil {
-		err = fmt.Errorf("open src file error:%v", err)
+		err = fmt.Errorf("open src file error: %w", err)
 		return
 	}
 	if srcFileIOCloser, ok := srcFileIO.(io.Closer); ok {
