@@ -85,7 +85,6 @@ func SyncGenerated(ranger func(fn func(path string)), contentGetter func(name st
 
 // SyncRebaseContents implements wise file sync, srcs are all sync into `rebaseDir`
 // for generated contents, there is no physical content,
-//
 func Sync(initPaths []string, sourcer SyncSourcer, opts SyncRebaseOptions) error {
 	return doSync(func(fn func(path string)) {
 		for _, path := range initPaths {
@@ -166,8 +165,7 @@ func doSync(ranger func(fn func(path string)), sourcer SyncSourcer, opts SyncReb
 	var waitGroup sync.WaitGroup
 
 	const chSize = 1000
-	// const gNum = 100 // 400M memory at most
-	const gNum = 101 // 400M memory at most
+	const gNum = 100 // 400M memory at most
 
 	var mutext sync.Mutex
 	var panicErr interface{}
