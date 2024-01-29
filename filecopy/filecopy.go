@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"os"
 	"path"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -165,7 +167,17 @@ func doSync(ranger func(fn func(path string)), sourcer SyncSourcer, opts SyncReb
 	var waitGroup sync.WaitGroup
 
 	const chSize = 1000
-	const gNum = 100 // 400M memory at most
+
+	// a tmp fix
+	var gNum = 100 // 400M memory at most
+	goNumStr := os.Getenv("GO_INSPECT_FILE_COPY_GO_NUM")
+	if goNumStr != "" {
+		v, _ := strconv.ParseInt(goNumStr, 10, 64)
+		if v > 0 {
+			log.Printf("file copy go num: %d", v)
+			gNum = int(v)
+		}
+	}
 
 	var mutext sync.Mutex
 	var panicErr interface{}
