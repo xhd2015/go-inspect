@@ -166,7 +166,7 @@ func doSync(ranger func(fn func(path string)), sourcer SyncSourcer, opts SyncReb
 
 	var waitGroup sync.WaitGroup
 
-	const chSize = 1000
+	const chSize = 30000
 
 	// a tmp fix
 	var gNum = 100 // 400M memory at most
@@ -186,6 +186,8 @@ func doSync(ranger func(fn func(path string)), sourcer SyncSourcer, opts SyncReb
 		path     string
 		fileInfo FileInfo
 	}
+
+	// TODO: handle panic
 
 	var res sync.Map
 	ch := make(chan info, chSize)
