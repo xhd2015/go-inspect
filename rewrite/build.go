@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/xhd2015/go-inspect/inspect/util"
@@ -90,7 +91,7 @@ func build(args []string, opts *BuildOptions) (result *BuildResult, err error) {
 		}
 		output = output + ".bin"
 		if !path.IsAbs(output) {
-			output = path.Join(projectRoot, output)
+			output = filepath.Join(projectRoot, output)
 		}
 	}
 
@@ -125,10 +126,10 @@ func build(args []string, opts *BuildOptions) (result *BuildResult, err error) {
 	}
 	workDir := projectRoot
 	if rebaseRoot != "" {
-		workDir = path.Join(rebaseRoot, projectRoot)
+		workDir = filepath.Join(rebaseRoot, projectRoot)
 		trimList := []string{fmtTrimPath(workDir, projectRoot)}
 		for origAbsDir, cleanedAbsDir := range mappedMod {
-			trimList = append(trimList, fmtTrimPath(path.Join(rebaseRoot, cleanedAbsDir), origAbsDir))
+			trimList = append(trimList, fmtTrimPath(filepath.Join(rebaseRoot, cleanedAbsDir), origAbsDir))
 		}
 		gcflagList = append(gcflagList, fmt.Sprintf("-trimpath=%s", strings.Join(trimList, ";")))
 	}
@@ -151,8 +152,11 @@ func build(args []string, opts *BuildOptions) (result *BuildResult, err error) {
 		fmt.Sprintf("cd %s", sh.Quote(workDir)),
 	}
 	if newGoROOT != "" {
-		cmdList = append(cmdList, fmt.Sprintf("export GOROOT=%s", sh.Quote(path.Join(rebaseRoot, newGoROOT))))
+		cmdList = append(cmdList, fmt.Sprintf("export GOROOT=%s", sh.Quote(filepath.Join(rebaseRoot, newGoROOT))))
 	}
+	// use separate gocache
+	// TODO: make rebaseRoot's parent an argument
+	cmdList = append(cmdList, fmt.Sprintf("export GOCACHE=%s", sh.Quote(filepath.Join(filepath.Dir(rebaseRoot), "go-build-cache"))))
 	buildCmd := "build"
 	if forTest {
 		buildCmd = "test -c"

@@ -153,7 +153,8 @@ func GenRewrite(args []string, rewriteRoot string, ctrl Controller, rewritter Vi
 	verbose := opts.Verbose
 	verboseCopy := opts.VerboseCopy
 	verboseRewrite := opts.VerboseRewrite
-	verboseCost := false
+	// verboseCost := false
+	verboseCost := true
 
 	if rewriteRoot == "" {
 		panic(fmt.Errorf("rewriteRoot is empty"))
@@ -329,8 +330,6 @@ func GenRewrite(args []string, rewriteRoot string, ctrl Controller, rewritter Vi
 		doMod()
 	}
 
-	writeContentTime := time.Now()
-
 	ctrl.BeforeCopy(g, session)
 
 	// import source first
@@ -345,33 +344,52 @@ func GenRewrite(args []string, rewriteRoot string, ctrl Controller, rewritter Vi
 	// ensure these files are all rooted at ${REWRITE_ROOT},
 	// including GOROOT/src rewritted ones.
 	ctrl.GenOverlay(g, session)
-	contentMap := make(map[string][]byte)
 
+	digestBegin := time.Now()
 	rewriteFS := session.RewriteFS()
-	newDigestMap := make(map[string]string)
+	fileInfoMapping := make(map[string]memfs.MemFileInfo)
+	var totalBytes int
 	rewriteFS.TraversePath(func(path string, e memfs.MemFileInfo) bool {
 		if !e.IsDir() {
-			content := e.Buffer().Bytes()
-			h := md5.New()
-			h.Write(content)
-			newDigestMap[path] = hex.EncodeToString(h.Sum(nil))
-			contentMap[path] = content
+			fileInfoMapping[path] = e
+			totalBytes += e.Buffer().Len()
 		}
 		return true
 	})
+	digestEnd := time.Now()
+
+	if verboseCost {
+		log.Printf("COST digest src: files=%d, totalSize=%d %v", len(fileInfoMapping), totalBytes, digestEnd.Sub(digestBegin))
+	}
+
+	// var disableDigest bool
+
+	// it seems that go cache is happy with content overridding
+	// disableDigest = true
 
 	// TODO: make file path relative to rewrite root
-	var curDigestMap map[string]string
+
+	var updatedDigestMap sync.Map // map[string]string
+	var savedDigestMap map[string]string
+
 	srcMD5File := session.Dirs().RewriteMetaSubPath("src-md5.json")
-	srcMD5Content, err := ioutil.ReadFile(srcMD5File)
-	if err != nil && !writefs.IsNotExist(err) {
-		err = fmt.Errorf("read %s: %w", filepath.Base(srcMD5File), err)
-		return
-	}
-	if len(srcMD5Content) > 0 {
-		jsonErr := json.Unmarshal(srcMD5Content, &curDigestMap)
-		if jsonErr != nil {
-			log.Printf("WARN bad src-md5.json ignored: %v", err)
+	if !opts.Force {
+		// with Force = true
+		// ShouldCopyFile is not actually called, so
+		// digest will not be updated,
+		// that leaves a un synchronized version of digest
+		// so we simply clear it
+		var srcMD5Content []byte
+		srcMD5Content, err = ioutil.ReadFile(srcMD5File)
+		if err != nil && !writefs.IsNotExist(err) {
+			err = fmt.Errorf("read %s: %w", filepath.Base(srcMD5File), err)
+			return
+		}
+		if len(srcMD5Content) > 0 {
+			jsonErr := json.Unmarshal(srcMD5Content, &savedDigestMap)
+			if jsonErr != nil {
+				log.Printf("WARN bad src-md5.json ignored: %v", err)
+			}
 		}
 	}
 
@@ -386,6 +404,9 @@ func GenRewrite(args []string, rewriteRoot string, ctrl Controller, rewritter Vi
 	// }
 	// in this copy config, srcPath is the same with destPath
 	// the extra info is looked up in a back map
+
+	// var changedFiles int64
+	copyBegin := time.Now()
 	err = filecopy.SyncFS(
 		rewriteFS,
 		[]string{rewriteRoot},
@@ -399,21 +420,50 @@ func GenRewrite(args []string, rewriteRoot string, ctrl Controller, rewritter Vi
 				log.Printf(format, args...)
 			}, verboseRewrite, verbose, 200*time.Millisecond),
 			DidCopy: func(srcPath, destPath string) {
-				// log.Printf("DEBUG write %s", srcPath)
 			},
-			ShouldCopyFile: func(srcFileInfo filecopy.FileInfo, destPath string, destFileInfo os.FileInfo) (bool, error) { /*isSourceNewer, i.e. true=needCopy*/
-				filePath := srcFileInfo.GetPath()
-				curDigest := curDigestMap[filePath]
-				return curDigest == "" || curDigest != newDigestMap[filePath], nil
+			ShouldCopyFile: func(srcPath string, destPath string, srcFileInfo filecopy.FileInfo, destFileInfo os.FileInfo) (bool, error) { /*isSourceNewer, i.e. true=needCopy*/
+				e := fileInfoMapping[destPath]
+				if e == nil || e.IsDir() {
+					return false, fmt.Errorf("invalid file: %s", destPath)
+				}
+				content := e.Buffer().Bytes()
+				h := md5.New()
+				h.Write(content)
+
+				curDigest := hex.EncodeToString(h.Sum(nil))
+				savedDigest := savedDigestMap[destPath]
+				if savedDigest == "" || savedDigest != curDigest {
+					// if atomic.AddInt64(&changedFiles, 1) < 10 {
+					// log.Printf("DEBUG write %s, digest:%s -> %s", destPath, savedDigest, curDigest)
+					// }
+
+					updatedDigestMap.Store(destPath, curDigest)
+					return true, nil
+				}
+				return false, nil
 			},
 		},
 	)
+	copyEnd := time.Now()
+	if verboseCost {
+		log.Printf("COST copy files to build root: %v", copyEnd.Sub(copyBegin))
+		// log.Printf("COST copy files to build root: %v, %d changed", copyEnd.Sub(copyBegin), atomic.LoadInt64(&changedFiles))
+	}
+
+	// clear, to help GC reclaim spaces
 
 	if err != nil {
 		return
 	}
-	// update dest md5
-	newDigestData, err := json.Marshal(newDigestMap)
+	updatedDigestMap.Range(func(file, digest interface{}) bool {
+		if savedDigestMap == nil {
+			savedDigestMap = make(map[string]string)
+		}
+		savedDigestMap[file.(string)] = digest.(string)
+		return true
+	})
+	// update dest digest(when force is true, all digest are cleared)
+	newDigestData, err := json.Marshal(savedDigestMap)
 	if err != nil {
 		err = fmt.Errorf("marhsal digest map: %w", err)
 		return
@@ -424,13 +474,8 @@ func GenRewrite(args []string, rewriteRoot string, ctrl Controller, rewritter Vi
 		return
 	}
 
-	writeContentEnd := time.Now()
 	if verboseCost {
-		log.Printf("COST write content:%v", writeContentEnd.Sub(writeContentTime))
-	}
-
-	if verboseCost {
-		log.Printf("COST GenRewrite:%v", time.Since(loadPkgTime))
+		log.Printf("COST load->rewrite->copy:%v", time.Since(loadPkgTime))
 	}
 	return
 }

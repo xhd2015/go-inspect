@@ -46,6 +46,7 @@ func TestMkdirAll(t *testing.T) {
 	}
 }
 
+// go test -run TestSyncRebasedSimple -v ./filecopy
 func TestSyncRebasedSimple(t *testing.T) {
 	src, dest, err := prepareDir("simple")
 	if err != nil {

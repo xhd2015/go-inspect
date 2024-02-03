@@ -28,6 +28,7 @@ type SyncRebaseOptions struct {
 	// Ignores tells the syncer that these dirs are not synced
 	Ignores []string
 
+	// Delete missing files
 	DeleteNotFound bool
 
 	Force bool
@@ -38,7 +39,7 @@ type SyncRebaseOptions struct {
 
 	DidCopy func(srcPath string, destPath string)
 
-	ShouldCopyFile func(srcFileInfo FileInfo, destPath string, destFile fs.FileInfo) (bool, error)
+	ShouldCopyFile func(srcPath string, destPath string, srcFileInfo FileInfo, destFile fs.FileInfo) (bool, error)
 
 	// target filesystem
 	FS writefs.FS
@@ -132,15 +133,6 @@ func doSync(ranger func(fn func(path string)), sourcer SyncSourcer, opts SyncReb
 		// may have err
 		return
 	}
-	// isDir && !isRegular can be true the same time.
-	checkFileCopyable := func(srcFile FileInfo) (isFile bool, isDir bool) {
-		isDir = srcFile.IsDir()
-		if isDir {
-			return
-		}
-		isFile = srcFile.IsFile()
-		return
-	}
 	var totalFiles int64
 	var finishedFiles int64
 	var copiedFiles int64
@@ -164,12 +156,11 @@ func doSync(ranger func(fn func(path string)), sourcer SyncSourcer, opts SyncReb
 		return opts.ProcessDestPath(s)
 	}
 
-	var waitGroup sync.WaitGroup
+	// wait of goroutines
+	var wg sync.WaitGroup
 
-	const chSize = 30000
-
-	// a tmp fix
-	var gNum = 100 // 400M memory at most
+	const chSize = 1000
+	var gNum = 50 // 200M memory at most
 	goNumStr := os.Getenv("GO_INSPECT_FILE_COPY_GO_NUM")
 	if goNumStr != "" {
 		v, _ := strconv.ParseInt(goNumStr, 10, 64)
@@ -179,21 +170,171 @@ func doSync(ranger func(fn func(path string)), sourcer SyncSourcer, opts SyncReb
 		}
 	}
 
+	type copyInfo struct {
+		path         string
+		destPath     string
+		fileInfo     FileInfo
+		destFileInfo fs.FileInfo
+	}
+
+	filesCh := make(chan copyInfo, chSize)
+
+	var hasErr int32 // 0:false 1:true
+
 	var mutext sync.Mutex
 	var panicErr interface{}
 
-	type info struct {
-		path     string
-		fileInfo FileInfo
+	// generated file will always go handleFile, no handleDir called
+	handleFile := func(buf []byte, srcPath string, srcFileInfo FileInfo, destPath string, destFile fs.FileInfo) error {
+		var err error
+		if destFile != nil && !destFile.Mode().IsRegular() {
+			// delete dest file if not a regular file,becuase we are about to truncate it
+			// isDir && !isRegular can be true at the same time.
+			err = fsHandle.RemoveAll(destPath)
+			if err != nil {
+				return err
+			}
+		}
+
+		// copy file
+		didCopy(srcPath, destPath)
+		err = copyFile(fsHandle, srcFileInfo, destPath, buf)
+		if err != nil {
+			return err
+		}
+
+		atomic.AddInt64(&copiedFiles, 1)
+		atomic.AddInt64(&finishedFiles, 1)
+		onUpdateStats()
+		return nil
+	}
+	// handleDirOrFile process file paths,
+	// if the path is a directory, it walks on it
+	// otherwise it sends the file to channel for copy
+	var handleDirOrFile func(filePath string, fileInfo FileInfo, destFileInfo fs.FileInfo, destFileInfoResolved bool) error
+
+	handleDirOrFile = func(filePath string, fileInfo FileInfo, destFileInfo fs.FileInfo, destFileInfoResolved bool) error {
+		if shouldIgnore(filePath) {
+			// fmt.Printf("DEBUG ignore file:%v\n", srcPath)
+			return nil
+		}
+
+		destPath := processDestPath(sourcer.GetDestPath(filePath))
+
+		var err error
+		if fileInfo == nil {
+			fileInfo, err = sourcer.GetSrcFileInfo(filePath)
+			if err != nil {
+				return err
+			}
+		}
+		if !fileInfo.IsDir() {
+			if !fileInfo.IsFile() {
+				// not a dir nor a file,so nothing to do
+				return nil
+			}
+			atomic.AddInt64(&totalFiles, 1)
+			onUpdateStats()
+
+			// check if we should copy the file
+			shouldCopy := true
+			if !opts.Force {
+				if !destFileInfoResolved {
+					var statErr error
+					destFileInfo, statErr = fsHandle.Stat(destPath)
+					if statErr != nil && !writefs.IsNotExist(statErr) {
+						return statErr
+					}
+				}
+				if destFileInfo != nil {
+					if shouldCopyFile != nil {
+						shouldCopy, err = shouldCopyFile(filePath, destPath, fileInfo, destFileInfo)
+						if err != nil {
+							return err
+						}
+					} else {
+						shouldCopy = fileInfo.NewerThan(destPath, destFileInfo)
+					}
+				}
+			}
+
+			if !shouldCopy {
+				atomic.AddInt64(&finishedFiles, 1)
+				onUpdateStats()
+				return nil
+			}
+			// write to filesChannel to consume
+			filesCh <- copyInfo{path: filePath, destPath: destPath, fileInfo: fileInfo, destFileInfo: destFileInfo}
+
+			return nil
+		}
+		// handle dirs
+		destFiles, destDirMade, err := readDestDir(destPath)
+		if err != nil {
+			return err
+		}
+
+		// create target dirs
+		if !destDirMade {
+			err = fsHandle.MkdirAll(destPath, 0755)
+			if err != nil {
+				return fmt.Errorf("create dest dir error:%v", err)
+			}
+			destDirMade = true
+		}
+
+		childSrcFiles, err := sourcer.GetSrcChildFiles(filePath)
+		if err != nil {
+			return fmt.Errorf("read src dir error:%v", err)
+		}
+
+		var destMap map[string]os.FileInfo
+		var missingInSrc map[string]bool
+		if len(destFiles) > 0 {
+			destMap = make(map[string]os.FileInfo, len(destFiles))
+			missingInSrc = make(map[string]bool, len(destFiles))
+			for _, destFile := range destFiles {
+				// NOTE: very prone to bug: if directly take address of destFile, you will get wrong result
+				// d := destFile
+				// destMap[destFile.Name()] = &d
+
+				destMap[destFile.Name()] = destFile
+				missingInSrc[destFile.Name()] = true
+			}
+		}
+		for _, childSrcFile := range childSrcFiles {
+			fileName := childSrcFile.GetName()
+			// mark no delete
+			if _, ok := missingInSrc[fileName]; ok {
+				missingInSrc[fileName] = false
+			}
+			err = handleDirOrFile(childSrcFile.GetPath(), childSrcFile, destMap[fileName], true)
+			if err != nil {
+				return err
+			}
+		}
+
+		// TODO may handle in a separate goroutine
+		if opts.DeleteNotFound {
+			// remove missing names
+			for name, missing := range missingInSrc {
+				if missing {
+					err = fsHandle.RemoveAll(path.Join(destPath, name))
+					if err != nil {
+						return fmt.Errorf("remove file error:%v", err)
+					}
+				}
+			}
+		}
+
+		return nil
 	}
 
-	// TODO: handle panic
-
 	var res sync.Map
-	ch := make(chan info, chSize)
-	exhaustCh := func() {
+	exhaustFilesCh := func() {
 		defer func() {
 			if e := recover(); e != nil {
+				atomic.StoreInt32(&hasErr, 1)
 				if panicErr == nil {
 					mutext.Lock()
 					if panicErr == nil {
@@ -204,246 +345,52 @@ func doSync(ranger func(fn func(path string)), sourcer SyncSourcer, opts SyncReb
 			}
 		}()
 		var buf []byte
-		for metaInfo := range ch {
-			srcPath := metaInfo.path
-			srcFileInfo := metaInfo.fileInfo
-			err := func(srcPath string, srcFileInfo FileInfo) error {
-				// fmt.Printf("DEBUG sync file:%v\n", srcPath)
-				defer waitGroup.Done()
-				if shouldIgnore(srcPath) {
-					// fmt.Printf("DEBUG ignore file:%v\n", srcPath)
-					return nil
-				}
-				destPath := processDestPath(sourcer.GetDestPath(srcPath))
-				if srcFileInfo == nil {
-					var err error
-					srcFileInfo, err = sourcer.GetSrcFileInfo(srcPath)
-					if err != nil {
-						return err
-					}
-					if !srcFileInfo.IsDir() && !srcFileInfo.IsFile() {
-						// not a dir nor a file,so nothing to do
-						return nil
-					}
-				}
-
-				// generated file will always go handleFile, no handleDir called
-				handleFile := func(srcFileInfo FileInfo, destPath string) error {
-					atomic.AddInt64(&totalFiles, 1)
-					onUpdateStats()
-
-					destFile, err := fsHandle.Stat(destPath)
-					needCopy := false
-					needDelDest := false
-					if err != nil {
-						if !writefs.IsNotExist(err) {
-							return err
-						}
-						needCopy = true
-					} else {
-						needDelDest = !destFile.Mode().IsRegular()
-						if needDelDest {
-							needCopy = true
-						} else if opts.Force {
-							needCopy = true
-						} else if shouldCopyFile != nil {
-							needCopy, err = shouldCopyFile(srcFileInfo, destPath, destFile)
-							if err != nil {
-								return err
-							}
-						} else {
-							needCopy = srcFileInfo.NewerThan(destPath, destFile)
-						}
-					}
-					if !needCopy {
-						atomic.AddInt64(&finishedFiles, 1)
-						onUpdateStats()
-						return nil
-					}
-					if needDelDest {
-						err = fsHandle.RemoveAll(destPath)
-						if err != nil {
-							return err
-						}
-					}
-					if buf == nil {
-						buf = make([]byte, 0, 4*1024*1024) // 4MB
-					}
-
-					// copy file
-					didCopy(srcFileInfo.GetPath(), destPath)
-					err = copyFile(fsHandle, srcFileInfo, destPath, buf)
-					if err != nil {
-						return err
-					}
-
-					atomic.AddInt64(&copiedFiles, 1)
-					atomic.AddInt64(&finishedFiles, 1)
-					onUpdateStats()
-
-					return nil
-				}
-				handleDir := func(srcFileInfo FileInfo, destPath string) error {
-					srcPath := srcFileInfo.GetPath()
-					destFiles, destDirMade, err := readDestDir(destPath)
-					if err != nil {
-						return err
-					}
-
-					childSrcFiles, err := sourcer.GetSrcChildFiles(srcPath)
-					if err != nil {
-						return fmt.Errorf("read src dir error:%v", err)
-					}
-
-					var destMap map[string]os.FileInfo
-					var needDeletes map[string]bool
-					if len(destFiles) > 0 {
-						destMap = make(map[string]os.FileInfo, len(destFiles))
-						needDeletes = make(map[string]bool, len(destFiles))
-						for _, destFile := range destFiles {
-							// NOTE: very prone to bug: if directly take address of destFile, you will get wrong result
-							// d := destFile
-							// destMap[destFile.Name()] = &d
-
-							destMap[destFile.Name()] = destFile
-							needDeletes[destFile.Name()] = true
-						}
-					}
-					// for each file
-					for _, childSrcFile := range childSrcFiles {
-						isFile, isDir := checkFileCopyable(childSrcFile)
-						if !isFile && !isDir {
-							// for non-regular files, do not copy
-							// also need delete from dst if any
-							continue
-						}
-
-						fileName := childSrcFile.GetName()
-						// mark no delete
-						if _, ok := needDeletes[fileName]; ok {
-							needDeletes[fileName] = false
-						}
-						if isDir {
-							continue
-						}
-
-						// total stat
-						atomic.AddInt64(&totalFiles, 1)
-						onUpdateStats()
-						if !opts.Force {
-							destFile := destMap[fileName]
-							if destFile != nil {
-								// fmt.Printf("DEBUG file:%v, src modTime:%v, dst modTime:%v, before:%v\n", path.Join(dir, srcFile.Name()), srcFile.ModTime(), destFile.ModTime(), srcFile.ModTime().Before(destFile.ModTime()))
-
-								// mod time is not so accurate, MD5 is a more generalized and stable way.
-								// but we actually can use length to
-								// we need
-								// actually
-								shouldCopy := true
-								if shouldCopyFile != nil {
-									needCopy, err := shouldCopyFile(childSrcFile, path.Join(destPath, fileName), destFile)
-									if err != nil {
-										return err
-									}
-									if !needCopy {
-										shouldCopy = false
-									}
-								} else {
-									needCopy := childSrcFile.NewerThan(path.Join(destPath, fileName), destFile)
-									if !needCopy {
-										shouldCopy = false
-									}
-								}
-								if !shouldCopy {
-									atomic.AddInt64(&finishedFiles, 1)
-									onUpdateStats()
-									continue
-								}
-							}
-						}
-
-						// fmt.Printf("DEBUG will copy file:%v\n", path.Join(dir, srcFile.Name()))
-
-						if !destDirMade {
-							err = fsHandle.MkdirAll(destPath, 0755)
-							if err != nil {
-								return fmt.Errorf("create dest dir error:%v", err)
-							}
-							destDirMade = true
-						}
-						if buf == nil {
-							buf = make([]byte, 0, 4*1024*1024) // 4MB
-						}
-
-						// copy file
-						childDestPath := path.Join(destPath, fileName)
-						didCopy(childSrcFile.GetPath(), childDestPath)
-						err = copyFile(fsHandle, childSrcFile, childDestPath, buf)
-						if err != nil {
-							return err
-						}
-						// copy stat
-						atomic.AddInt64(&copiedFiles, 1)
-						atomic.AddInt64(&finishedFiles, 1)
-						onUpdateStats()
-					}
-
-					if opts.DeleteNotFound {
-						// remove uncover names
-						for name, needDelete := range needDeletes {
-							if needDelete {
-								err = fsHandle.RemoveAll(path.Join(destPath, name))
-								if err != nil {
-									return fmt.Errorf("remove file error:%v", err)
-								}
-							}
-						}
-					}
-
-					// send dir to sub ch
-					for _, srcFile := range childSrcFiles {
-						if !srcFile.IsDir() {
-							continue
-						}
-						waitGroup.Add(1)
-						ch <- info{path: srcFile.GetPath(), fileInfo: srcFile}
-					}
-					return nil
-				}
-
-				if srcFileInfo.IsDir() {
-					return handleDir(srcFileInfo, destPath)
-				} else if srcFileInfo.IsFile() {
-					return handleFile(srcFileInfo, destPath)
-				}
-				return nil
-			}(srcPath, srcFileInfo)
+		for copyInfo := range filesCh {
+			if atomic.LoadInt32(&hasErr) == 1 {
+				return
+			}
+			if buf == nil {
+				buf = make([]byte, 0, 4*1024*1024) // 4MB
+			}
+			err := handleFile(buf, copyInfo.path, copyInfo.fileInfo, copyInfo.destPath, copyInfo.destFileInfo)
 			if err != nil {
-				res.Store(srcPath, err)
+				atomic.StoreInt32(&hasErr, 1)
+				res.Store(copyInfo.path, err)
 				return
 			}
 		}
 	}
-	// start 10 goroutines to do the work
+
+	// start goroutines to copy files
 	for i := 0; i < gNum; i++ {
-		go exhaustCh()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			exhaustFilesCh()
+		}()
 	}
 
-	// write initial roots
+	var walkErr error
+	// walk initial roots
 	ranger(func(path string) {
-		waitGroup.Add(1)
-		ch <- info{path: path}
+		if walkErr != nil {
+			return
+		}
+		walkErr = handleDirOrFile(path, nil, nil, false)
 	})
 
-	waitGroup.Wait()
-	close(ch)
+	close(filesCh)
+	wg.Wait()
 
 	// fmt.Printf("DEBUG: total files:%d, copied: %d\n", totalFiles, copiedFiles)
 	lastStat = true
 	onUpdateStats()
 
+	if walkErr != nil {
+		return fmt.Errorf("walk dir: %w", walkErr)
+	}
 	if panicErr != nil {
-		return fmt.Errorf("panic:%v", panicErr)
+		return fmt.Errorf("panic: %v", panicErr)
 	}
 
 	var errList []string
@@ -566,7 +513,11 @@ func NewLogger(log func(format string, args ...interface{}), enable bool, enable
 			return
 		}
 		last = now
-		log("copy %.2f%%  total:%4d, finished:%4d, changed:%4d", float64(finished+1)/float64(total+1)*100, total, finished, copied)
+		var percent float64
+		if total > 0 {
+			percent = float64(finished) / float64(total) * 100
+		}
+		log("copy %.2f%% total:%4d, finished:%4d, changed:%4d", percent, total, finished, copied)
 		if lastStat {
 			log("copy finished")
 		}
