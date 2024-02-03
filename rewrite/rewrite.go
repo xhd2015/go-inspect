@@ -27,29 +27,29 @@ import (
 	"github.com/xhd2015/go-inspect/inspect"
 	"github.com/xhd2015/go-inspect/inspect/load"
 	"github.com/xhd2015/go-inspect/inspect/util"
-	"github.com/xhd2015/go-inspect/rewrite/session"
+	session_pkg "github.com/xhd2015/go-inspect/rewrite/session"
 )
 
 type Controller interface {
-	BeforeLoad(opts *BuildRewriteOptions, session session.Session)
-	InitSession(g inspect.Global, session session.Session)
-	AfterLoad(g inspect.Global, session session.Session)
+	BeforeLoad(opts *BuildRewriteOptions, session session_pkg.Session)
+	InitSession(g inspect.Global, session session_pkg.Session)
+	AfterLoad(g inspect.Global, session session_pkg.Session)
 	// FilterPkgs, defaults to starter packages
-	FilterPkgs(g inspect.Global, session session.Session) func(func(p inspect.Pkg, pkgFlag PkgFlag) bool)
-	BeforeCopy(g inspect.Global, session session.Session)
+	FilterPkgs(g inspect.Global, session session_pkg.Session) func(func(p inspect.Pkg, pkgFlag PkgFlag) bool)
+	BeforeCopy(g inspect.Global, session session_pkg.Session)
 	// GenOverlay generate overlay for src files.
 	// Overlay is a rewritten content of the original file or just a generated content
 	// without original file/dir.
-	GenOverlay(g inspect.Global, session session.Session)
+	GenOverlay(g inspect.Global, session session_pkg.Session)
 }
 
 type ControllerFuncs struct {
-	BeforeLoadFn  func(opts *BuildRewriteOptions, session session.Session)
-	InitSessionFn func(g inspect.Global, session session.Session)
-	AfterLoadFn   func(g inspect.Global, session session.Session)
-	FilterPkgsFn  func(g inspect.Global, session session.Session) func(func(p inspect.Pkg, pkgFlag PkgFlag) bool)
-	BeforeCopyFn  func(g inspect.Global, session session.Session)
-	GenOverlayFn  func(g inspect.Global, session session.Session)
+	BeforeLoadFn  func(opts *BuildRewriteOptions, session session_pkg.Session)
+	InitSessionFn func(g inspect.Global, session session_pkg.Session)
+	AfterLoadFn   func(g inspect.Global, session session_pkg.Session)
+	FilterPkgsFn  func(g inspect.Global, session session_pkg.Session) func(func(p inspect.Pkg, pkgFlag PkgFlag) bool)
+	BeforeCopyFn  func(g inspect.Global, session session_pkg.Session)
+	GenOverlayFn  func(g inspect.Global, session session_pkg.Session)
 }
 type Content struct {
 	SrcFile string
@@ -80,40 +80,40 @@ func (c PkgFlag) IsStarterMod() bool {
 	return c&BitStarterMod == 1
 }
 
-func (c *ControllerFuncs) BeforeLoad(opts *BuildRewriteOptions, session session.Session) {
+func (c *ControllerFuncs) BeforeLoad(opts *BuildRewriteOptions, session session_pkg.Session) {
 	if c.BeforeLoadFn == nil {
 		return
 	}
 	c.BeforeLoadFn(opts, session)
 }
-func (c *ControllerFuncs) InitSession(g inspect.Global, session session.Session) {
+func (c *ControllerFuncs) InitSession(g inspect.Global, session session_pkg.Session) {
 	if c.InitSessionFn == nil {
 		return
 	}
 	c.InitSessionFn(g, session)
 }
 
-func (c *ControllerFuncs) AfterLoad(g inspect.Global, session session.Session) {
+func (c *ControllerFuncs) AfterLoad(g inspect.Global, session session_pkg.Session) {
 	if c.AfterLoadFn == nil {
 		return
 	}
 	c.AfterLoadFn(g, session)
 }
 
-func (c *ControllerFuncs) FilterPkgs(g inspect.Global, session session.Session) func(func(p inspect.Pkg, pkgFlag PkgFlag) bool) {
+func (c *ControllerFuncs) FilterPkgs(g inspect.Global, session session_pkg.Session) func(func(p inspect.Pkg, pkgFlag PkgFlag) bool) {
 	if c.FilterPkgsFn == nil {
 		return nil
 	}
 	return c.FilterPkgsFn(g, session)
 }
 
-func (c *ControllerFuncs) BeforeCopy(g inspect.Global, session session.Session) {
+func (c *ControllerFuncs) BeforeCopy(g inspect.Global, session session_pkg.Session) {
 	if c.BeforeCopyFn == nil {
 		return
 	}
 	c.BeforeCopyFn(g, session)
 }
-func (c *ControllerFuncs) GenOverlay(g inspect.Global, session session.Session) {
+func (c *ControllerFuncs) GenOverlay(g inspect.Global, session session_pkg.Session) {
 	if c.GenOverlayFn == nil {
 		return
 	}
@@ -174,8 +174,10 @@ func GenRewrite(args []string, rewriteRoot string, ctrl Controller, rewritter Vi
 		err = fmt.Errorf("get abs dir err:%v", err)
 		return
 	}
+	// src-shadow
+	memfsDir := filepath.Join(filepath.Dir(rewriteRoot), filepath.Base(rewriteRoot)+"-shadow")
 	// create a session, and rewrite
-	session := session_impl.NewSession(nil /* filled later*/, nil /*filled later: this is a workaround*/)
+	session := session_impl.NewSession(nil /* filled later*/, nil /*filled later: this is a workaround*/, memfsDir)
 
 	ctrl.BeforeLoad(opts, session)
 
@@ -451,6 +453,17 @@ func GenRewrite(args []string, rewriteRoot string, ctrl Controller, rewritter Vi
 	}
 
 	// clear, to help GC reclaim spaces
+	// runtime.SetFinalizer(session, func(s session_pkg.Session) {
+	// 	log.Printf("DEBUG session end")
+	// })
+
+	// runtime.SetFinalizer(rewriteFS, func(*memfs.MemFS) {
+	// 	log.Printf("DEBUG rewriteFS end")
+	// })
+	session = nil
+	rewriteFS = nil
+	// log.Printf("DEBUG GC start")
+	// log.Printf("DEBUG GC finished")
 
 	if err != nil {
 		return

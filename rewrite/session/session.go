@@ -42,6 +42,7 @@ type SessionDirs interface {
 	ProjectRoot() string
 	RewriteMetaRoot() string
 	RewriteMetaSubPath(subPath string) string
+	// source root, e.g. {meta}/src
 	RewriteRoot() string
 	RewriteProjectRoot() string
 	RewriteProjectVendorRoot() string

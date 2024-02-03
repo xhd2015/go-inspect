@@ -34,12 +34,12 @@ type session struct {
 
 var _ sessionpkg.Session = ((*session)(nil))
 
-func NewSession(g inspect.Global, opts sessionpkg.Options) sessionpkg.Session {
+func NewSession(g inspect.Global, opts sessionpkg.Options, memfsRoot string) sessionpkg.Session {
 	return &session{
 		g:                             g,
 		data:                          &sessionData{},
 		opts:                          opts,
-		rewriteFS:                     memfs.New(),
+		rewriteFS:                     memfs.NewAtFs(memfsRoot),
 		SourceImportRegistryRetriever: source_import.NewRegistry(),
 	}
 }

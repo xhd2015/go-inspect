@@ -5,6 +5,7 @@ import (
 	"log"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/xhd2015/go-inspect/inspect/util"
@@ -36,6 +37,8 @@ func buildRewrite(args []string, ctrl Controller, rewritter Visitor, opts *Build
 	if err != nil {
 		panic(err)
 	}
+	// gc to expire all GenRewrite's stuffs
+	runtime.GC()
 	if opts.SkipBuild {
 		return &BuildResult{
 			Output: "skipped",
