@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -20,7 +21,6 @@ import (
 	"github.com/xhd2015/go-vendor-pack/go_cmd"
 	"github.com/xhd2015/go-vendor-pack/go_cmd/model"
 	"github.com/xhd2015/go-vendor-pack/writefs"
-	"github.com/xhd2015/go-vendor-pack/writefs/memfs"
 
 	"github.com/xhd2015/go-inspect/code/gen"
 	"github.com/xhd2015/go-inspect/filecopy"
@@ -347,23 +347,7 @@ func GenRewrite(args []string, rewriteRoot string, ctrl Controller, rewritter Vi
 	// including GOROOT/src rewritted ones.
 	ctrl.GenOverlay(g, session)
 
-	digestBegin := time.Now()
 	rewriteFS := session.RewriteFS()
-	fileInfoMapping := make(map[string]memfs.MemFileInfo)
-	var totalBytes int
-	rewriteFS.TraversePath(func(path string, e memfs.MemFileInfo) bool {
-		if !e.IsDir() {
-			fileInfoMapping[path] = e
-			totalBytes += e.Buffer().Len()
-		}
-		return true
-	})
-	digestEnd := time.Now()
-
-	if verboseCost {
-		log.Printf("COST digest src: files=%d, totalSize=%d %v", len(fileInfoMapping), totalBytes, digestEnd.Sub(digestBegin))
-	}
-
 	// var disableDigest bool
 
 	// it seems that go cache is happy with content overridding
@@ -424,13 +408,19 @@ func GenRewrite(args []string, rewriteRoot string, ctrl Controller, rewritter Vi
 			DidCopy: func(srcPath, destPath string) {
 			},
 			ShouldCopyFile: func(srcPath string, destPath string, srcFileInfo filecopy.FileInfo, destFileInfo os.FileInfo) (bool, error) { /*isSourceNewer, i.e. true=needCopy*/
-				e := fileInfoMapping[destPath]
-				if e == nil || e.IsDir() {
-					return false, fmt.Errorf("invalid file: %s", destPath)
+				f, err := rewriteFS.OpenFileRead(destPath)
+				if err != nil {
+					return false, err
 				}
-				content := e.Buffer().Bytes()
+				defer f.Close()
+
+				// TODO: may give an option 
+				// do discard digest in CI environment
 				h := md5.New()
-				h.Write(content)
+				_, err = io.Copy(h, f)
+				if err != nil {
+					return false, err
+				}
 
 				curDigest := hex.EncodeToString(h.Sum(nil))
 				savedDigest := savedDigestMap[destPath]
