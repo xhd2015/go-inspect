@@ -414,7 +414,7 @@ func GenRewrite(args []string, rewriteRoot string, ctrl Controller, rewritter Vi
 				}
 				defer f.Close()
 
-				// TODO: may give an option 
+				// TODO: may give an option
 				// do discard digest in CI environment
 				h := md5.New()
 				_, err = io.Copy(h, f)
@@ -740,7 +740,7 @@ func appendVendorModulesIgnoreNonExist(fs writefs.FS, path string, replaceMap ma
 	}
 	bytes, err := writefs.ReadFile(fs, path)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if writefs.IsNotExist(err) {
 			// if the file does not exist, we can safely ignore updating it
 			err = nil
 		}
