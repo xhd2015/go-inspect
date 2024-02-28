@@ -143,7 +143,8 @@ func doSync(ranger func(fn func(path string)), sourcer SyncSourcer, opts SyncReb
 	onUpdateStats := func() {
 		totalFiles := atomic.LoadInt64(&totalFiles)
 		// warn every 30s for massive files copy
-		if totalFiles >= 300000 && (lastWarnMassiveFiles.IsZero() || time.Since(lastWarnMassiveFiles) >= 30*time.Second) {
+		// a case found ever: 200,000 files found, because GOPATH is incorrectly set in GOROOT
+		if totalFiles >= 30000 && (lastWarnMassiveFiles.IsZero() || time.Since(lastWarnMassiveFiles) >= 30*time.Second) {
 			finishedFileNum := atomic.LoadInt64(&finishedFiles)
 			lastWarnMassiveFiles = time.Now()
 			log.Printf("WARNING: decreased performance due to massive files: %d / %d", finishedFileNum, totalFiles)
