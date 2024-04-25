@@ -6,6 +6,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/xhd2015/go-inspect/inspect/util"
@@ -132,7 +133,6 @@ func build(args []string, opts *BuildOptions) (result *BuildResult, err error) {
 	workDir := projectRoot
 	if rebaseRoot != "" {
 		workDir = filepath.Join(rebaseRoot, projectRoot)
-
 		if !disableTrimPath {
 			trimList := []string{fmtTrimPath(workDir, projectRoot)}
 			for origAbsDir, cleanedAbsDir := range mappedMod {
@@ -145,9 +145,9 @@ func build(args []string, opts *BuildOptions) (result *BuildResult, err error) {
 	if output != "" {
 		outputFlags = fmt.Sprintf(`-o %s`, sh.Quote(output))
 	}
-	gcflags := " "
+	var gcflagsQuoted string
 	if len(gcflagList) > 0 {
-		gcflags = "-gcflags=all=" + sh.Quotes(gcflagList...)
+		gcflagsQuoted = `-gcflags=all=` + strconv.Quote(sh.Quotes(gcflagList...))
 	}
 
 	// NOTE: can only specify -gcflags once, the last flag wins.
@@ -173,7 +173,7 @@ func build(args []string, opts *BuildOptions) (result *BuildResult, err error) {
 	if len(goFlags) > 0 {
 		goFlagsSpace = " " + sh.Quotes(goFlags...)
 	}
-	cmdList = append(cmdList, fmt.Sprintf(`go %s %s %s%s %s`, buildCmd, outputFlags, sh.Quote(gcflags), goFlagsSpace, sh.JoinArgs(args)))
+	cmdList = append(cmdList, fmt.Sprintf(`go %s %s %s%s %s`, buildCmd, outputFlags, gcflagsQuoted, goFlagsSpace, sh.JoinArgs(args)))
 
 	_, _, err = sh.RunBashWithOpts(cmdList, sh.RunBashOptions{
 		Verbose: verbose,
