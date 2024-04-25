@@ -303,6 +303,8 @@ func doRewriteNoCheckPanic(loadArgs []string, opts *RewriteCallbackOpts) (proj *
 		ForTest:    buildOpts.ForTest,
 		GoFlags:    buildOpts.GoFlags,
 		BuildFlags: buildOpts.BuildFlags,
+
+		DisableTrimPath: buildOpts.DisableTrimPath,
 	})
 	if err != nil {
 		panic(err)

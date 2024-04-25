@@ -45,15 +45,16 @@ func buildRewrite(args []string, ctrl Controller, rewritter Visitor, opts *Build
 		}, nil
 	}
 	buildOpts := &BuildOptions{
-		Verbose:     opts.Verbose,
-		ProjectRoot: opts.ProjectDir,
-		RebaseRoot:  rewriteRoot,
-		MappedMod:   res.MappedMod,
-		NewGoROOT:   res.UseNewGOROOT,
-		Debug:       opts.Debug,
-		Output:      opts.Output,
-		ForTest:     opts.ForTest,
-		GoFlags:     opts.BuildFlags,
+		Verbose:         opts.Verbose,
+		ProjectRoot:     opts.ProjectDir,
+		RebaseRoot:      rewriteRoot,
+		MappedMod:       res.MappedMod,
+		NewGoROOT:       res.UseNewGOROOT,
+		Debug:           opts.Debug,
+		Output:          opts.Output,
+		ForTest:         opts.ForTest,
+		GoFlags:         opts.BuildFlags,
+		DisableTrimPath: opts.DisableTrimPath,
 	}
 	return build(args, buildOpts)
 }
@@ -68,6 +69,7 @@ func build(args []string, opts *BuildOptions) (result *BuildResult, err error) {
 	newGoROOT := opts.NewGoROOT
 	forTest := opts.ForTest
 	goFlags := opts.GoFlags
+	disableTrimPath := opts.DisableTrimPath
 	// project root
 	projectRoot, err := util.ToAbsPath(opts.ProjectRoot)
 	if err != nil {
@@ -130,11 +132,14 @@ func build(args []string, opts *BuildOptions) (result *BuildResult, err error) {
 	workDir := projectRoot
 	if rebaseRoot != "" {
 		workDir = filepath.Join(rebaseRoot, projectRoot)
-		trimList := []string{fmtTrimPath(workDir, projectRoot)}
-		for origAbsDir, cleanedAbsDir := range mappedMod {
-			trimList = append(trimList, fmtTrimPath(filepath.Join(rebaseRoot, cleanedAbsDir), origAbsDir))
+
+		if !disableTrimPath {
+			trimList := []string{fmtTrimPath(workDir, projectRoot)}
+			for origAbsDir, cleanedAbsDir := range mappedMod {
+				trimList = append(trimList, fmtTrimPath(filepath.Join(rebaseRoot, cleanedAbsDir), origAbsDir))
+			}
+			gcflagList = append(gcflagList, fmt.Sprintf("-trimpath=%s", strings.Join(trimList, ";")))
 		}
-		gcflagList = append(gcflagList, fmt.Sprintf("-trimpath=%s", strings.Join(trimList, ";")))
 	}
 	outputFlags := ""
 	if output != "" {

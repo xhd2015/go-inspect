@@ -28,6 +28,8 @@ type BuildOpts struct {
 	ForTest    bool
 	GoFlags    []string // passed to go load
 	BuildFlags []string // passed to go build
+
+	DisableTrimPath bool
 }
 
 // readonly options
@@ -58,6 +60,8 @@ type BuildOptions struct {
 	// cleanedModOrigAbsDir - modOrigAbsDir
 	MappedMod map[string]string
 	NewGoROOT string
+
+	DisableTrimPath bool
 }
 
 type BuildRewriteOptions struct {
@@ -83,4 +87,6 @@ type BuildRewriteOptions struct {
 	Debug     bool
 	Output    string
 	SkipBuild bool
+
+	DisableTrimPath bool
 }
