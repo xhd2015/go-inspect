@@ -18,3 +18,7 @@ var LoadModeSyntax = []packages.LoadMode{
 	// packages.NeedTypesInfo,
 	packages.NeedModule,
 }
+
+var LoadModeSyntaxFiles = append(LoadModeSyntax,
+	packages.NeedFiles, // fill the GoFiles fields, including test files
+)

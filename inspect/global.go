@@ -182,12 +182,31 @@ func getForTest(goPkg *packages.Package) string {
 	// but in some case it may(maybe an edge case) the test package has an extra suffix _test
 	// pkgPath := goPkg.PkgPath
 
-	if f == nil {
+	if f != nil {
+		forTest := f.(string)
+		if forTest != "" {
+			return forTest
+		}
+	}
+
+	if goPkg.Name == "main" {
+		// the package is generated for linking
 		return ""
 	}
-	s, _ := f.(string)
-	return s
+	// the XX_test package is for XX
+	const suffix = "_test"
+	if strings.HasSuffix(goPkg.PkgPath, suffix) {
+		return goPkg.PkgPath[:len(goPkg.PkgPath)-len(suffix)]
+	}
+	// otherwise, if there are _test.go files, that's a test package
+	for _, goFile := range goPkg.GoFiles {
+		if strings.HasSuffix(goFile, "_test.go") {
+			return goPkg.PkgPath
+		}
+	}
+	return ""
 }
+
 func tryGetField(val reflect.Value, name string) reflect.Value {
 	defer func() {
 		if e := recover(); e != nil {
