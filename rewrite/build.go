@@ -56,6 +56,7 @@ func buildRewrite(args []string, ctrl Controller, rewritter Visitor, opts *Build
 		ForTest:         opts.ForTest,
 		GoFlags:         opts.BuildFlags,
 		DisableTrimPath: opts.DisableTrimPath,
+		GoBinary:        opts.GoBinary,
 	}
 	return build(args, buildOpts)
 }
@@ -71,6 +72,7 @@ func build(args []string, opts *BuildOptions) (result *BuildResult, err error) {
 	forTest := opts.ForTest
 	goFlags := opts.GoFlags
 	disableTrimPath := opts.DisableTrimPath
+	goBinary := opts.GoBinary
 	// project root
 	projectRoot, err := util.ToAbsPath(opts.ProjectRoot)
 	if err != nil {
@@ -173,7 +175,11 @@ func build(args []string, opts *BuildOptions) (result *BuildResult, err error) {
 	if len(goFlags) > 0 {
 		goFlagsSpace = " " + sh.Quotes(goFlags...)
 	}
-	cmdList = append(cmdList, fmt.Sprintf(`go %s %s %s%s %s`, buildCmd, outputFlags, gcflagsQuoted, goFlagsSpace, sh.JoinArgs(args)))
+	goCmd := "go"
+	if goBinary != "" {
+		goCmd = goBinary
+	}
+	cmdList = append(cmdList, fmt.Sprintf(`%s %s %s %s%s %s`, goCmd, buildCmd, outputFlags, gcflagsQuoted, goFlagsSpace, sh.JoinArgs(args)))
 
 	_, _, err = sh.RunBashWithOpts(cmdList, sh.RunBashOptions{
 		Verbose: verbose,

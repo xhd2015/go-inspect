@@ -30,6 +30,7 @@ type BuildOpts struct {
 	BuildFlags []string // passed to go build
 
 	DisableTrimPath bool
+	GoBinary        string
 }
 
 // readonly options
@@ -62,6 +63,7 @@ type BuildOptions struct {
 	NewGoROOT string
 
 	DisableTrimPath bool
+	GoBinary        string
 }
 
 type BuildRewriteOptions struct {
@@ -89,4 +91,5 @@ type BuildRewriteOptions struct {
 	SkipBuild bool
 
 	DisableTrimPath bool
+	GoBinary        string
 }
