@@ -3,6 +3,7 @@ package depcheck
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"golang.org/x/tools/go/packages"
 )
@@ -11,6 +12,8 @@ type PkgDepInfo struct {
 	Pkg        string        `json:"pkg"`
 	Depends    []*PkgDepInfo `json:"depends"`
 	DependedBy []string      `json:"dependedBy,omitempty"`
+
+	hasTarget bool
 }
 type CollectOptions struct {
 	NeedDependedBy bool
@@ -83,6 +86,48 @@ func CollectDeps(pkgs []*packages.Package, opts *CollectOptions) ([]*PkgDepInfo,
 	return root.Depends, pkgMapping, nil
 }
 
+func FilterDeps(deps []*PkgDepInfo, pkgs []string) []*PkgDepInfo {
+	if len(pkgs) == 0 {
+		return deps
+	}
+	targets := make(map[string]bool, len(pkgs))
+	for _, pkg := range pkgs {
+		targets[pkg] = true
+	}
+	result := filterWithTargets(&PkgDepInfo{
+		Depends: deps,
+	}, targets)
+	if result == nil {
+		return nil
+	}
+	return result.Depends
+}
+
+func filterWithTargets(dep *PkgDepInfo, targets map[string]bool) *PkgDepInfo {
+	if dep == nil {
+		return nil
+	}
+	cp := *dep
+	var depends []*PkgDepInfo
+	for _, child := range dep.Depends {
+		ch := filterWithTargets(child, targets)
+		if ch == nil {
+			continue
+		}
+		depends = append(depends, ch)
+	}
+	cp.Depends = depends
+	if targets[cp.Pkg] || len(depends) > 0 {
+		return &cp
+	}
+	return nil
+}
+
+// a
+//  b
+//   c
+//  d
+
 func GetImportTrace(depInfo []*PkgDepInfo, pkg string) []string {
 	var result []string
 	var deepFind func(prefix []string, pkgInfo *PkgDepInfo) bool
@@ -105,4 +150,29 @@ func GetImportTrace(depInfo []*PkgDepInfo, pkg string) []string {
 		}
 	}
 	return result
+}
+
+func FormatDepTrace(depInfo *PkgDepInfo) string {
+	if depInfo == nil {
+		return ""
+	}
+	return FormatDepTraces([]*PkgDepInfo{depInfo})
+}
+
+func FormatDepTraces(depInfo []*PkgDepInfo) string {
+	var lines []string
+	for _, dep := range depInfo {
+		lines = formatDepTrace(dep, "", lines)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func formatDepTrace(depInfo *PkgDepInfo, prefix string, lines []string) []string {
+	lines = append(lines, prefix+depInfo.Pkg)
+
+	for _, dep := range depInfo.Depends {
+		lines = formatDepTrace(dep, prefix+"  ", lines)
+	}
+
+	return lines
 }

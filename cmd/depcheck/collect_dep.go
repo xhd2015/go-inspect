@@ -20,8 +20,9 @@ Options:
      -mod=vendor         load with -mod=vendor 
      --project-dir DIR   project dir
   -o OUTPUT              write output to file
-     --pretty            pretty json or output 
 	 --check PKG         check specific package
+	 --json              output json
+	 --pretty            pretty json output 
      --version           show version
   -h,--help              show help
 
@@ -53,6 +54,7 @@ func run(args []string) error {
 	var test bool
 	var output string
 	var pretty bool
+	var fmtJSON bool
 	for i := 0; i < n; i++ {
 		arg := args[i]
 		if arg == "--" {
@@ -73,6 +75,10 @@ func run(args []string) error {
 		}
 		if arg == "--pretty" {
 			pretty = true
+			continue
+		}
+		if arg == "--json" {
+			fmtJSON = true
 			continue
 		}
 		if arg == "-o" {
@@ -158,40 +164,36 @@ func run(args []string) error {
 	deps, pkgMapping, err := depcheck.CollectDeps(pkgs, &depcheck.CollectOptions{
 		NeedDependedBy: false,
 	})
+
 	if err != nil {
 		return err
 	}
 	if len(checks) > 0 {
 		for _, check := range checks {
-			dep := pkgMapping[check]
-			if dep == nil {
-				return fmt.Errorf("package not found with -check=%s", check)
+			if pkgMapping[check] == nil {
+				return fmt.Errorf("pkg %s is not a dependency", check)
 			}
-			importTrace := depcheck.GetImportTrace(deps, check)
-
-			for i, v := range importTrace {
-				if pretty {
-					fmt.Print(strings.Repeat(" ", i*2))
-				}
-				fmt.Println(v)
-			}
-			return nil
 		}
+		deps = depcheck.FilterDeps(deps, checks)
+	}
+	var outputData []byte
+	if fmtJSON {
+		if pretty {
+			outputData, err = json.MarshalIndent(deps, "", "    ")
+		} else {
+			outputData, err = json.Marshal(deps)
+		}
+	} else {
+		outputData = []byte(depcheck.FormatDepTraces(deps))
 	}
 
-	var depsJSON []byte
-	if pretty {
-		depsJSON, err = json.MarshalIndent(deps, "", "    ")
-	} else {
-		depsJSON, err = json.Marshal(deps)
-	}
 	if err != nil {
 		return err
 	}
 	if output != "" {
-		return ioutil.WriteFile(output, depsJSON, 0755)
+		return ioutil.WriteFile(output, outputData, 0755)
 	} else {
-		fmt.Println(string(depsJSON))
+		fmt.Println(string(outputData))
 	}
 	return nil
 }
