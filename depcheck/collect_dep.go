@@ -12,8 +12,6 @@ type PkgDepInfo struct {
 	Pkg        string        `json:"pkg"`
 	Depends    []*PkgDepInfo `json:"depends"`
 	DependedBy []string      `json:"dependedBy,omitempty"`
-
-	hasTarget bool
 }
 type CollectOptions struct {
 	NeedDependedBy bool
@@ -103,24 +101,49 @@ func FilterDeps(deps []*PkgDepInfo, pkgs []string) []*PkgDepInfo {
 	return result.Depends
 }
 
+func LimitDepths(deps []*PkgDepInfo, maxDepth int) []*PkgDepInfo {
+	res := filterDep(&PkgDepInfo{Depends: deps}, 0, func(dep *PkgDepInfo, depth int) bool {
+		return depth <= maxDepth
+	}, nil)
+	if res == nil {
+		return nil
+	}
+	return res.Depends
+}
+
 func filterWithTargets(dep *PkgDepInfo, targets map[string]bool) *PkgDepInfo {
+	return filterDep(dep, 0, nil, func(dep *PkgDepInfo, depth int) bool {
+		if targets[dep.Pkg] || len(dep.Depends) > 0 {
+			return true
+		}
+		return false
+	})
+}
+
+func filterDep(dep *PkgDepInfo, depth int, pre func(dep *PkgDepInfo, depth int) bool, post func(dep *PkgDepInfo, depth int) bool) *PkgDepInfo {
 	if dep == nil {
+		return nil
+	}
+	if pre != nil && !pre(dep, depth) {
 		return nil
 	}
 	cp := *dep
 	var depends []*PkgDepInfo
 	for _, child := range dep.Depends {
-		ch := filterWithTargets(child, targets)
+		ch := filterDep(child, depth+1, pre, post)
 		if ch == nil {
 			continue
 		}
 		depends = append(depends, ch)
 	}
 	cp.Depends = depends
-	if targets[cp.Pkg] || len(depends) > 0 {
-		return &cp
+	if post != nil && !post(&cp, depth) {
+		return nil
 	}
-	return nil
+	// if targets[cp.Pkg] || len(depends) > 0 {
+	// 	return &cp
+	// }
+	return &cp
 }
 
 // a

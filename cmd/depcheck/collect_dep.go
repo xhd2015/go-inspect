@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/xhd2015/go-inspect/depcheck"
@@ -22,6 +23,7 @@ Options:
   -o OUTPUT              write output to file
 	 --check PKG         check specific package
 	 --json              output json
+	 --depth N           max depth to print 
 	 --pretty            pretty json output 
      --version           show version
   -h,--help              show help
@@ -55,6 +57,8 @@ func run(args []string) error {
 	var output string
 	var pretty bool
 	var fmtJSON bool
+
+	var maxDepth int
 	for i := 0; i < n; i++ {
 		arg := args[i]
 		if arg == "--" {
@@ -79,6 +83,19 @@ func run(args []string) error {
 		}
 		if arg == "--json" {
 			fmtJSON = true
+			continue
+		}
+		if arg == "--depth" {
+			if i+1 >= n {
+				return fmt.Errorf("--depth requires value")
+			}
+			d := args[i+1]
+			i++
+			dv, err := strconv.ParseInt(d, 10, 64)
+			if err != nil {
+				return fmt.Errorf("--depth: %w", err)
+			}
+			maxDepth = int(dv)
 			continue
 		}
 		if arg == "-o" {
@@ -175,6 +192,9 @@ func run(args []string) error {
 			}
 		}
 		deps = depcheck.FilterDeps(deps, checks)
+	}
+	if maxDepth > 0 {
+		deps = depcheck.LimitDepths(deps, maxDepth)
 	}
 	var outputData []byte
 	if fmtJSON {
