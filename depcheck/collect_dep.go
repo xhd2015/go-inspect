@@ -16,6 +16,10 @@ type CollectOptions struct {
 	NeedDependedBy bool
 }
 
+var fakePkgC = &packages.Package{
+	PkgPath: "C",
+}
+
 func CollectDeps(pkgs []*packages.Package, opts *CollectOptions) ([]*PkgDepInfo, map[string]*PkgDepInfo, error) {
 	var needDependedBy bool
 	if opts != nil {
@@ -49,7 +53,14 @@ func CollectDeps(pkgs []*packages.Package, opts *CollectOptions) ([]*PkgDepInfo,
 				if err != nil {
 					return fmt.Errorf("parse import path: %s %w", imp.Path.Value, err)
 				}
-				impPkg := p.Imports[depPkgPath]
+				// the fake C package
+				var impPkg *packages.Package
+				if depPkgPath != "C" {
+					impPkg = p.Imports[depPkgPath]
+				} else {
+					impPkg = fakePkgC
+				}
+
 				if impPkg == nil {
 					return fmt.Errorf("getting imported package failed: %s->%s", p.PkgPath, depPkgPath)
 				}
