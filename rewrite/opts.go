@@ -43,6 +43,8 @@ type RewriteOpts struct {
 	// ShouldRewritePackage an extra filter to include other packages
 	ShouldRewritePackage func(pkg inspect.Pkg) bool
 
+	OnRewriteMetaRoot func(rewriteMeta string)
+
 	// predefined code sets for generated content
 	PreCode map[string]string
 

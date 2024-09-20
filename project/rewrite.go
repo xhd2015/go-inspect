@@ -163,6 +163,11 @@ func doRewriteNoCheckPanic(loadArgs []string, opts *RewriteCallbackOpts) (proj *
 	dg.Write([]byte(projectAbsDir))
 	// rewriteMetaRoot = {rewriteBase}/{rewriteName}/{path_md5}
 	rewriteMetaRoot := rewrite.GetRewriteRoot(filepath.Join(rewriteBase, rewriteName), hex.EncodeToString(dg.Sum(nil)))
+
+	if opts.RewriteOpts.OnRewriteMetaRoot != nil {
+		opts.RewriteOpts.OnRewriteMetaRoot(rewriteMetaRoot)
+	}
+
 	rewriteRoot := filepath.Join(rewriteMetaRoot, "src")
 
 	projectRewriteRoot := path.Join(rewriteRoot, projectAbsDir)
