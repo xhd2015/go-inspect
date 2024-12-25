@@ -3,6 +3,8 @@ package rewrite
 import (
 	"fmt"
 	"log"
+	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"runtime"
@@ -183,6 +185,15 @@ func build(args []string, opts *BuildOptions) (result *BuildResult, err error) {
 
 	_, _, err = sh.RunBashWithOpts(cmdList, sh.RunBashOptions{
 		Verbose: verbose,
+		FilterCmd: func(cmd *exec.Cmd) {
+			cmd.Env = os.Environ()
+			if targetGOOS := os.Getenv("TARGET_GOOS"); targetGOOS != "" {
+				cmd.Env = append(cmd.Env, "GOOS="+targetGOOS)
+			}
+			if targetGOARCH := os.Getenv("TARGET_GOARCH"); targetGOARCH != "" {
+				cmd.Env = append(cmd.Env, "GOARCH="+targetGOARCH)
+			}
+		},
 	})
 	if err != nil {
 		log.Printf("build %s failed", output)
