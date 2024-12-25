@@ -3,11 +3,10 @@ package rewrite
 import (
 	"fmt"
 	"log"
-	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/xhd2015/go-inspect/inspect/util"
@@ -47,21 +46,22 @@ func buildRewrite(args []string, ctrl Controller, rewritter Visitor, opts *Build
 		}, nil
 	}
 	buildOpts := &BuildOptions{
-		Verbose:     opts.Verbose,
-		ProjectRoot: opts.ProjectDir,
-		RebaseRoot:  rewriteRoot,
-		MappedMod:   res.MappedMod,
-		NewGoROOT:   res.UseNewGOROOT,
-		Debug:       opts.Debug,
-		Output:      opts.Output,
-		ForTest:     opts.ForTest,
-		GoFlags:     opts.BuildFlags,
+		Verbose:         opts.Verbose,
+		ProjectRoot:     opts.ProjectDir,
+		RebaseRoot:      rewriteRoot,
+		MappedMod:       res.MappedMod,
+		NewGoROOT:       res.UseNewGOROOT,
+		Debug:           opts.Debug,
+		Output:          opts.Output,
+		ForTest:         opts.ForTest,
+		GoFlags:         opts.BuildFlags,
+		DisableTrimPath: opts.DisableTrimPath,
+		GoBinary:        opts.GoBinary,
 	}
 	return build(args, buildOpts)
 }
 
 func build(args []string, opts *BuildOptions) (result *BuildResult, err error) {
-	log.Printf("=================    building      ================")
 	if opts == nil {
 		opts = &BuildOptions{}
 	}
@@ -71,6 +71,8 @@ func build(args []string, opts *BuildOptions) (result *BuildResult, err error) {
 	newGoROOT := opts.NewGoROOT
 	forTest := opts.ForTest
 	goFlags := opts.GoFlags
+	disableTrimPath := opts.DisableTrimPath
+	goBinary := opts.GoBinary
 	// project root
 	projectRoot, err := util.ToAbsPath(opts.ProjectRoot)
 	if err != nil {
@@ -133,19 +135,21 @@ func build(args []string, opts *BuildOptions) (result *BuildResult, err error) {
 	workDir := projectRoot
 	if rebaseRoot != "" {
 		workDir = filepath.Join(rebaseRoot, projectRoot)
-		trimList := []string{fmtTrimPath(workDir, projectRoot)}
-		for origAbsDir, cleanedAbsDir := range mappedMod {
-			trimList = append(trimList, fmtTrimPath(filepath.Join(rebaseRoot, cleanedAbsDir), origAbsDir))
+		if !disableTrimPath {
+			trimList := []string{fmtTrimPath(workDir, projectRoot)}
+			for origAbsDir, cleanedAbsDir := range mappedMod {
+				trimList = append(trimList, fmtTrimPath(filepath.Join(rebaseRoot, cleanedAbsDir), origAbsDir))
+			}
+			gcflagList = append(gcflagList, fmt.Sprintf("-trimpath=%s", strings.Join(trimList, ";")))
 		}
-		gcflagList = append(gcflagList, fmt.Sprintf("-trimpath=%s", strings.Join(trimList, ";")))
 	}
 	outputFlags := ""
 	if output != "" {
 		outputFlags = fmt.Sprintf(`-o %s`, sh.Quote(output))
 	}
-	gcflags := " "
+	var gcflagsQuoted string
 	if len(gcflagList) > 0 {
-		gcflags = "-gcflags=all=" + sh.Quotes(gcflagList...)
+		gcflagsQuoted = `-gcflags=all=` + strconv.Quote(sh.Quotes(gcflagList...))
 	}
 
 	// NOTE: can only specify -gcflags once, the last flag wins.
@@ -171,36 +175,25 @@ func build(args []string, opts *BuildOptions) (result *BuildResult, err error) {
 	if len(goFlags) > 0 {
 		goFlagsSpace = " " + sh.Quotes(goFlags...)
 	}
-	cmdList = append(cmdList, fmt.Sprintf(`go %s %s %s%s %s`, buildCmd, outputFlags, sh.Quote(gcflags), goFlagsSpace, sh.JoinArgs(args)))
+	goCmd := "go"
+	if goBinary != "" {
+		goCmd = goBinary
+	}
+	cmdList = append(cmdList, fmt.Sprintf(`%s %s %s %s%s %s`, goCmd, buildCmd, outputFlags, gcflagsQuoted, goFlagsSpace, sh.JoinArgs(args)))
 
 	_, _, err = sh.RunBashWithOpts(cmdList, sh.RunBashOptions{
 		Verbose: verbose,
-		FilterCmd: func(cmd *exec.Cmd) {
-			targetGOOS := os.Getenv("TARGET_GOOS")
-			if targetGOOS == "" {
-				targetGOOS = "linux"
-			}
-			targetGOARCH := os.Getenv("TARGET_GOARCH")
-			if targetGOARCH == "" {
-				targetGOARCH = "amd64"
-			}
-			cmd.Env = append(os.Environ(),
-				"GOOS="+targetGOOS,
-				"GOARCH="+targetGOARCH,
-				"CGO_ENABLED=0",
-			)
-
-			log.Printf("==== Build Environment Variables ====")
-			if cmd.Env != nil {
-				for _, env := range cmd.Env {
-					log.Printf("ENV: %s", env)
-				}
-			} else {
-				log.Printf("WARNING: cmd.Env is nil")
-			}
-			log.Printf("================= build successful ================")
-		},
 	})
+	if err != nil {
+		log.Printf("build %s failed", output)
+		err = fmt.Errorf("build %s err:%v", output, err)
+		return
+	}
+
+	if verbose {
+		log.Printf("build successful: %s", output)
+	}
+
 	result = &BuildResult{
 		Output: output,
 	}
