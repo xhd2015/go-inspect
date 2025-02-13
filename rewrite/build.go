@@ -167,7 +167,7 @@ func build(args []string, opts *BuildOptions) (result *BuildResult, err error) {
 		cmdList = append(cmdList, fmt.Sprintf("export GOROOT=%s", sh.Quote(filepath.Join(rebaseRoot, newGoROOT))))
 	}
 	// allow custom GOCACHE from environment, fallback to default if not specified
-	goCachePath := os.Getenv("GOCACHE")
+	goCachePath := os.Getenv("CUSTOM_GOCACHE")
 	if goCachePath == "" {
 		goCachePath = filepath.Join(filepath.Dir(rebaseRoot), "go-build-cache")
 	}
