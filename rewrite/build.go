@@ -166,9 +166,12 @@ func build(args []string, opts *BuildOptions) (result *BuildResult, err error) {
 	if newGoROOT != "" {
 		cmdList = append(cmdList, fmt.Sprintf("export GOROOT=%s", sh.Quote(filepath.Join(rebaseRoot, newGoROOT))))
 	}
-	// use separate gocache
-	// TODO: make rebaseRoot's parent an argument
-	cmdList = append(cmdList, fmt.Sprintf("export GOCACHE=%s", sh.Quote(filepath.Join(filepath.Dir(rebaseRoot), "go-build-cache"))))
+	// allow custom GOCACHE from environment, fallback to default if not specified
+	goCachePath := os.Getenv("GOCACHE")
+	if goCachePath == "" {
+		goCachePath = filepath.Join(filepath.Dir(rebaseRoot), "go-build-cache")
+	}
+	cmdList = append(cmdList, fmt.Sprintf("export GOCACHE=%s", sh.Quote(goCachePath)))
 	buildCmd := "build"
 	if forTest {
 		buildCmd = "test -c"
