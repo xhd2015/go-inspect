@@ -68,7 +68,11 @@ func LoadPackages(args []string, opts *LoadOptions) (inspect.Global, error) {
 	if perr != nil {
 		return nil, perr
 	}
-	return inspect.NewGlobal(fset, absDir, pkgs), nil
+	var buildOptions []inspect.BuildGlobalOption
+	if !opts.ForTest {
+		buildOptions = append(buildOptions, inspect.WithCheckTestPackage(false))
+	}
+	return inspect.NewGlobal(fset, absDir, pkgs, buildOptions...), nil
 }
 
 func normalizePackage(pkg *packages.Package) {

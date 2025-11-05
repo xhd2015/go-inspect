@@ -76,8 +76,32 @@ type global struct {
 
 var _ Global = ((*global)(nil))
 
+type BuildGlobalOption func(cfg *buildGlobalConfig)
+
+// doSomethingConfig holds configuration for parsing
+type buildGlobalConfig struct {
+	checkTestPackage bool
+}
+
+// WithCheckTestPackage checks if the package is a test package
+// default is true
+func WithCheckTestPackage(checkTestPackage bool) BuildGlobalOption {
+	return func(cfg *buildGlobalConfig) {
+		cfg.checkTestPackage = checkTestPackage
+	}
+}
+
 // pkgs: starter packages
-func NewGlobal(fset *token.FileSet, root string, pkgs []*packages.Package) Global {
+func NewGlobal(fset *token.FileSet, root string, pkgs []*packages.Package, opts ...BuildGlobalOption) Global {
+	cfg := &buildGlobalConfig{
+		checkTestPackage: true,
+	}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+
+	checkTestPackage := cfg.checkTestPackage
+
 	g := &global{
 		fset: fset,
 	}
@@ -91,7 +115,10 @@ func NewGlobal(fset *token.FileSet, root string, pkgs []*packages.Package) Globa
 
 	regBuilder := NewRegistryBuilder()
 	packages.Visit(pkgs, func(pkg *packages.Package) bool {
-		forTest := getForTest(pkg)
+		var forTest string
+		if checkTestPackage {
+			forTest = getForTest(pkg)
+		}
 		// test package
 		// if strings.HasSuffix(pkg.ID, ".test") && pkg.ID[:len(pkg.ID)-len(".test")] == pkg.PkgPath {
 		if forTest != "" {
