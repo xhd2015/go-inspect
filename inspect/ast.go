@@ -17,7 +17,8 @@ import (
 
 // Node defines basic abstraction
 // known implementations:
-//    Pkg,File,Func
+//
+//	Pkg,File,Func
 type Node interface {
 	ASTNode() ast.Node
 }
@@ -213,6 +214,7 @@ func (c *file) EditImports(edit edit.Edit) ImportListContext {
 	addImport := func(use, pkg string) {
 		st := "import " + util.FormatImport(use, pkg) + ";"
 		if first {
+			// TODO: check if insertPos is a `;`, go does not allow `;;`
 			st = ";" + st
 			first = false
 		}
