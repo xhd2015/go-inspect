@@ -111,6 +111,11 @@ func (c *options) BuildFlags() []string {
 	return c.opts.BuildOpts.BuildFlags
 }
 
+// InPlace returns true if in-place instrumentation is enabled
+func (c *options) InPlace() bool {
+	return c.opts.InPlace
+}
+
 var _ Options = (*options)(nil)
 
 type defaultRewriter struct {

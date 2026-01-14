@@ -145,6 +145,13 @@ func CleanGoFsPath(s string) string {
 //
 // the second phase of filecopy.SyncGenerated:
 // overlay, which is for generated file.
+// reportProgress reports progress if callback is set
+func reportProgress(opts *BuildRewriteOptions, stage string, message string) {
+	if opts != nil && opts.OnProgress != nil {
+		opts.OnProgress(stage, message)
+	}
+}
+
 func GenRewrite(args []string, rewriteRoot string, ctrl Controller, rewritter Visitor, opts *BuildRewriteOptions) (res *GenRewriteResult, err error) {
 	res = &GenRewriteResult{}
 	if opts == nil {
@@ -162,6 +169,7 @@ func GenRewrite(args []string, rewriteRoot string, ctrl Controller, rewritter Vi
 	if opts.Verbose {
 		log.Printf("rewrite root: %s", rewriteRoot)
 	}
+	reportProgress(opts, "init", fmt.Sprintf("rewrite root: %s", rewriteRoot))
 	err = os.MkdirAll(rewriteRoot, 0777)
 	if err != nil {
 		err = fmt.Errorf("error mkdir %s %v", rewriteRoot, err)
@@ -183,15 +191,35 @@ func GenRewrite(args []string, rewriteRoot string, ctrl Controller, rewritter Vi
 
 	loadPkgTime := time.Now()
 
+	reportProgress(opts, "load_packages", fmt.Sprintf("loading packages: args=%v, projectDir=%s, goFlags=%v", args, projectDir, opts.GoFlags))
+
+	// Start heartbeat goroutine for long-running package loading
+	loadDone := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-loadDone:
+				return
+			case <-ticker.C:
+				elapsed := time.Since(loadPkgTime)
+				reportProgress(opts, "load_packages", fmt.Sprintf("loading packages... (%v elapsed)", elapsed.Round(time.Second)))
+			}
+		}
+	}()
+
 	g, err := load.LoadPackages(args, &load.LoadOptions{
 		ProjectDir: projectDir,
 		ForTest:    opts.ForTest,
 		BuildFlags: opts.GoFlags,
 	})
+	close(loadDone)
 	if err != nil {
 		err = fmt.Errorf("loading packages err: %v", err)
 		return
 	}
+	reportProgress(opts, "load_packages", fmt.Sprintf("loaded packages in %v", time.Since(loadPkgTime)))
 
 	// hack: this is a workaround
 	session_impl.OnSessionGlobal(session, g)
@@ -242,6 +270,7 @@ func GenRewrite(args []string, rewriteRoot string, ctrl Controller, rewritter Vi
 		log.Printf("COST load package -> rewrite package:%v", rewriteTime.Sub(loadPkgEnd))
 	}
 
+	reportProgress(opts, "rewrite", "rewriting packages...")
 	VisitAll(func(f func(pkg inspect.Pkg) bool) {
 		pkgsFn(func(p inspect.Pkg, pkgFlag PkgFlag) bool {
 			return f(p)
@@ -251,6 +280,7 @@ func GenRewrite(args []string, rewriteRoot string, ctrl Controller, rewritter Vi
 	if verboseCost {
 		log.Printf("COST rewrite:%v", rewriteEnd.Sub(rewriteTime))
 	}
+	reportProgress(opts, "rewrite", fmt.Sprintf("rewritten packages in %v", rewriteEnd.Sub(rewriteTime)))
 
 	// TODO: move vendor detection to Global
 	extraPkgInVendor := false
@@ -293,47 +323,57 @@ func GenRewrite(args []string, rewriteRoot string, ctrl Controller, rewritter Vi
 		}
 	}
 
-	// copy files
+	// copy files (skip when InPlace is true)
 	var destUpdatedBySource map[string]bool // todo: clear
-	doCopy := func() {
-		if verbose {
-			log.Printf("copying packages files into rewrite dir: total packages=%d", pkgCnt)
-		}
-		copyTime := time.Now()
-		destUpdatedBySource = copyPackageFiles(pkgsFn, session.RewriteFS(), rewriteRoot, extraPkgInVendor, hasStd, opts.Force, verboseCopy, verbose)
-		copyEnd := time.Now()
-		if verboseCost {
-			log.Printf("COST copy:%v", copyEnd.Sub(copyTime))
-		}
-	}
-	_ = destUpdatedBySource
-	doCopy()
-
-	// NOTE: only non-vendor needs to replace relative module path
-	// with absolute path, because vendored packages are inside
-	// vendor
-	if !extraPkgInVendor {
-		// TODO: edit go mod in JSON and format back
-		// mod replace only work at module-level, so if at least
-		// one package inside a module is modified, we need to
-		// copy its module out.
-		doMod := func() {
-			// after copied, modify go.mod with replace absoluted
+	if !opts.InPlace {
+		doCopy := func() {
 			if verbose {
-				log.Printf("replacing go.mod with rewritten paths")
+				log.Printf("copying packages files into rewrite dir: total packages=%d", pkgCnt)
 			}
-			goModTime := time.Now()
-			res.MappedMod = makeGomodReplaceAboslute(session.RewriteFS(), pkgsFn, rewriteRoot, projectDir, verbose)
-			goModEnd := time.Now()
+			reportProgress(opts, "copy_files", fmt.Sprintf("copying %d packages into rewrite dir...", pkgCnt))
+			copyTime := time.Now()
+			destUpdatedBySource = copyPackageFiles(pkgsFn, session.RewriteFS(), rewriteRoot, extraPkgInVendor, hasStd, opts.Force, verboseCopy, verbose)
+			copyEnd := time.Now()
 			if verboseCost {
-				log.Printf("COST go mod:%v", goModEnd.Sub(goModTime))
+				log.Printf("COST copy:%v", copyEnd.Sub(copyTime))
 			}
+			reportProgress(opts, "copy_files", fmt.Sprintf("copied packages in %v", copyEnd.Sub(copyTime)))
 		}
-		doMod()
+		_ = destUpdatedBySource
+		doCopy()
+
+		// NOTE: only non-vendor needs to replace relative module path
+		// with absolute path, because vendored packages are inside
+		// vendor
+		if !extraPkgInVendor {
+			// TODO: edit go mod in JSON and format back
+			// mod replace only work at module-level, so if at least
+			// one package inside a module is modified, we need to
+			// copy its module out.
+			doMod := func() {
+				// after copied, modify go.mod with replace absoluted
+				if verbose {
+					log.Printf("replacing go.mod with rewritten paths")
+				}
+				reportProgress(opts, "go_mod", "replacing go.mod with rewritten paths...")
+				goModTime := time.Now()
+				res.MappedMod = makeGomodReplaceAboslute(session.RewriteFS(), pkgsFn, rewriteRoot, projectDir, verbose)
+				goModEnd := time.Now()
+				if verboseCost {
+					log.Printf("COST go mod:%v", goModEnd.Sub(goModTime))
+				}
+				reportProgress(opts, "go_mod", fmt.Sprintf("go.mod replaced in %v", goModEnd.Sub(goModTime)))
+			}
+			doMod()
+		}
+	} else if verbose {
+		log.Printf("in-place mode: skipping file copy, writing directly to project dir")
+		reportProgress(opts, "copy_files", "in-place mode: skipping file copy")
 	}
 
 	ctrl.BeforeCopy(g, session)
 
+	reportProgress(opts, "gen_overlay", "generating overlay files...")
 	// import source first
 	// RewriteFS fill override order(least order higher priority):
 	//   original source -> source import -> overlay -> rewrite each file
@@ -346,6 +386,7 @@ func GenRewrite(args []string, rewriteRoot string, ctrl Controller, rewritter Vi
 	// ensure these files are all rooted at ${REWRITE_ROOT},
 	// including GOROOT/src rewritted ones.
 	ctrl.GenOverlay(g, session)
+	reportProgress(opts, "gen_overlay", "overlay files generated")
 
 	rewriteFS := session.RewriteFS()
 	// var disableDigest bool
@@ -391,6 +432,11 @@ func GenRewrite(args []string, rewriteRoot string, ctrl Controller, rewritter Vi
 	// in this copy config, srcPath is the same with destPath
 	// the extra info is looked up in a back map
 
+	deleteNotFound := true
+	if opts != nil && opts.InPlace {
+		deleteNotFound = false
+	}
+
 	// var changedFiles int64
 	copyBegin := time.Now()
 	err = filecopy.SyncFS(
@@ -399,7 +445,7 @@ func GenRewrite(args []string, rewriteRoot string, ctrl Controller, rewritter Vi
 		"", // target dir already rooted
 		filecopy.SyncRebaseOptions{
 			Ignores:        ignores,
-			DeleteNotFound: true,
+			DeleteNotFound: deleteNotFound,
 			Force:          opts.Force,
 			// ProcessDestPath: cleanFsGoPath, // not needed as we already did that
 			OnUpdateStats: filecopy.NewLogger(func(format string, args ...interface{}) {
@@ -480,6 +526,7 @@ func GenRewrite(args []string, rewriteRoot string, ctrl Controller, rewritter Vi
 	if verboseCost {
 		log.Printf("COST load->rewrite->copy:%v", time.Since(loadPkgTime))
 	}
+	reportProgress(opts, "complete", fmt.Sprintf("rewrite complete in %v", time.Since(loadPkgTime)))
 	return
 }
 

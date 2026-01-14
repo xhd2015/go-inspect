@@ -196,7 +196,15 @@ func (c *session) Gen(callback sessionpkg.EditCallback) {
 }
 
 func (c *session) SetRewriteFile(filePath string, content string) error {
-	p := CleanGoFsPath(path.Join(c.dirs.RewriteRoot(), filePath))
+	var p string
+	// If InPlace mode and filePath is already absolute and starts with rewriteRoot,
+	// don't prepend again. This happens in InPlace mode where f.AbsPath() returns
+	// an absolute path under the project directory (which is also the rewriteRoot).
+	if c.opts != nil && c.opts.InPlace() && filepath.IsAbs(filePath) {
+		p = filePath
+	} else {
+		p = CleanGoFsPath(path.Join(c.dirs.RewriteRoot(), filePath))
+	}
 	return c.setFile(p, content)
 }
 

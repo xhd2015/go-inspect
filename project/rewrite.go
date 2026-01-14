@@ -145,33 +145,48 @@ func doRewriteNoCheckPanic(loadArgs []string, opts *RewriteCallbackOpts) (proj *
 	}
 
 	buildOpts := opts.RewriteOpts.BuildOpts
-	rewriteName := opts.RewriteName
-	if rewriteName == "" {
-		rewriteName = "go-inspect"
-	}
-	rewriteBase := opts.RewriteOpts.RewriteRoot
-	if rewriteBase == "" {
-		rewriteBase = os.TempDir()
-	}
 
 	projectAbsDir, err := util.ToAbsPath(buildOpts.ProjectDir)
 	if err != nil {
 		panic(fmt.Errorf("get abs dir err:%v", err))
 	}
 
-	dg := md5.New()
-	dg.Write([]byte(projectAbsDir))
-	// rewriteMetaRoot = {rewriteBase}/{rewriteName}/{path_md5}
-	rewriteMetaRoot := rewrite.GetRewriteRoot(filepath.Join(rewriteBase, rewriteName), hex.EncodeToString(dg.Sum(nil)))
+	var rewriteMetaRoot string
+	var rewriteRoot string
+	var projectRewriteRoot string
+	var rewriteProjectVendorRoot string
+
+	// Handle in-place instrumentation
+	if opts.RewriteOpts.InPlace {
+		// In-place mode: write directly to project directory
+		rewriteMetaRoot = projectAbsDir
+		rewriteRoot = projectAbsDir
+		projectRewriteRoot = projectAbsDir
+		rewriteProjectVendorRoot = path.Join(projectAbsDir, "vendor")
+	} else {
+		// Normal mode: copy to separate rewrite root
+		rewriteName := opts.RewriteName
+		if rewriteName == "" {
+			rewriteName = "go-inspect"
+		}
+		rewriteBase := opts.RewriteOpts.RewriteRoot
+		if rewriteBase == "" {
+			rewriteBase = os.TempDir()
+		}
+
+		dg := md5.New()
+		dg.Write([]byte(projectAbsDir))
+		// rewriteMetaRoot = {rewriteBase}/{rewriteName}/{path_md5}
+		rewriteMetaRoot = rewrite.GetRewriteRoot(filepath.Join(rewriteBase, rewriteName), hex.EncodeToString(dg.Sum(nil)))
+
+		rewriteRoot = filepath.Join(rewriteMetaRoot, "src")
+		projectRewriteRoot = path.Join(rewriteRoot, projectAbsDir)
+		rewriteProjectVendorRoot = path.Join(rewriteRoot, "vendor")
+	}
 
 	if opts.RewriteOpts.OnRewriteMetaRoot != nil {
 		opts.RewriteOpts.OnRewriteMetaRoot(rewriteMetaRoot)
 	}
-
-	rewriteRoot := filepath.Join(rewriteMetaRoot, "src")
-
-	projectRewriteRoot := path.Join(rewriteRoot, projectAbsDir)
-	rewriteProjectVendorRoot := path.Join(rewriteRoot, "vendor")
 
 	ctrl := &rewrite.ControllerFuncs{
 		BeforeLoadFn: func(rwOpts *rewrite.BuildRewriteOptions, session session.Session) {
@@ -299,6 +314,7 @@ func doRewriteNoCheckPanic(loadArgs []string, opts *RewriteCallbackOpts) (proj *
 		Verbose:    buildOpts.Verbose,
 		ProjectDir: buildOpts.ProjectDir,
 		RebaseRoot: rewriteRoot,
+		InPlace:    opts.RewriteOpts.InPlace,
 		Force:      buildOpts.Force,
 
 		Debug:     buildOpts.Debug,
@@ -311,6 +327,7 @@ func doRewriteNoCheckPanic(loadArgs []string, opts *RewriteCallbackOpts) (proj *
 
 		DisableTrimPath: buildOpts.DisableTrimPath,
 		GoBinary:        buildOpts.GoBinary,
+		OnProgress:      opts.RewriteOpts.OnProgress,
 	})
 	if err != nil {
 		panic(err)

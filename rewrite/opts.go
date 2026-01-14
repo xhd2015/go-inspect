@@ -40,6 +40,11 @@ type RewriteOpts struct {
 	RewriteRoot string // default: a randomly made temp dir
 	RewriteName string // default: code-lens-agent
 
+	// InPlace enables in-place instrumentation without copying to rewrite root
+	// When true, overlay files are written directly to the project directory
+	// and no separate rewrite root is created
+	InPlace bool
+
 	// ShouldRewritePackage an extra filter to include other packages
 	ShouldRewritePackage func(pkg inspect.Pkg) bool
 
@@ -49,6 +54,9 @@ type RewriteOpts struct {
 	PreCode map[string]string
 
 	SkipBuild bool
+
+	// OnProgress is called to report progress during the rewrite process
+	OnProgress ProgressLogCallback
 }
 
 type BuildOptions struct {
@@ -66,7 +74,13 @@ type BuildOptions struct {
 
 	DisableTrimPath bool
 	GoBinary        string
+
+	// OnProgress is called to report progress during the build process
+	OnProgress ProgressLogCallback
 }
+
+// ProgressLogCallback is a callback function for logging progress during rewrite
+type ProgressLogCallback func(stage string, message string)
 
 type BuildRewriteOptions struct {
 	Verbose        bool
@@ -75,6 +89,10 @@ type BuildRewriteOptions struct {
 	// VerboseGomod   bool
 	ProjectDir string // the project dir
 	RebaseRoot string
+
+	// InPlace enables in-place instrumentation without copying files
+	// When true, overlay files are written directly to the project directory
+	InPlace bool
 
 	// RewriteStd should files inside GOROOT/src
 	// be modified?
@@ -94,4 +112,8 @@ type BuildRewriteOptions struct {
 
 	DisableTrimPath bool
 	GoBinary        string
+
+	// OnProgress is called to report progress during the rewrite process
+	// Stages include: "load_packages", "rewrite", "copy_files", "gen_overlay", "go_mod", "build"
+	OnProgress ProgressLogCallback
 }

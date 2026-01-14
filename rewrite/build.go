@@ -59,6 +59,7 @@ func buildRewrite(args []string, ctrl Controller, rewritter Visitor, opts *Build
 		GoFlags:         opts.BuildFlags,
 		DisableTrimPath: opts.DisableTrimPath,
 		GoBinary:        opts.GoBinary,
+		OnProgress:      opts.OnProgress,
 	}
 	return build(args, buildOpts)
 }
@@ -186,6 +187,11 @@ func build(args []string, opts *BuildOptions) (result *BuildResult, err error) {
 	}
 	cmdList = append(cmdList, fmt.Sprintf(`%s %s %s %s%s %s`, goCmd, buildCmd, outputFlags, gcflagsQuoted, goFlagsSpace, sh.JoinArgs(args)))
 
+	// Report build start
+	if opts.OnProgress != nil {
+		opts.OnProgress("build", fmt.Sprintf("building %s...", output))
+	}
+
 	_, _, err = sh.RunBashWithOpts(cmdList, sh.RunBashOptions{
 		Verbose: verbose,
 		FilterCmd: func(cmd *exec.Cmd) {
@@ -200,12 +206,18 @@ func build(args []string, opts *BuildOptions) (result *BuildResult, err error) {
 	})
 	if err != nil {
 		log.Printf("build %s failed", output)
+		if opts.OnProgress != nil {
+			opts.OnProgress("build", fmt.Sprintf("build failed: %v", err))
+		}
 		err = fmt.Errorf("build %s err:%v", output, err)
 		return
 	}
 
 	if verbose {
 		log.Printf("build successful: %s", output)
+	}
+	if opts.OnProgress != nil {
+		opts.OnProgress("build", fmt.Sprintf("build successful: %s", output))
 	}
 
 	result = &BuildResult{

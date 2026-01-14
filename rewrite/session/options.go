@@ -20,4 +20,7 @@ type Options interface {
 
 	// BuildFlags only apply to build
 	BuildFlags() []string
+
+	// InPlace returns true if in-place instrumentation is enabled
+	InPlace() bool
 }
