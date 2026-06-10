@@ -136,7 +136,7 @@ func NewGlobal(fset *token.FileSet, root string, pkgs []*packages.Package, opts 
 				// skip such generated test sugar package
 				return true
 			}
-			panic(fmt.Errorf("non-test pkg %s has no module", pkg.PkgPath))
+			panic(fmt.Errorf("non-test pkg %s has no module; if this is a vendored package, ensure vendor/modules.txt includes it (try `go mod vendor`)", pkg.PkgPath))
 		}
 
 		mod := pkg.Module

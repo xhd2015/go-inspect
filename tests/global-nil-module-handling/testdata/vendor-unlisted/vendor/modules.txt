@@ -1,0 +1,3 @@
+# example.com/module v0.1.0
+## explicit; go 1.19
+example.com/module/pkg/listed
